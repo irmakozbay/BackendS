@@ -226,7 +226,11 @@ public class ResponseAgent {
                 "Ask the user for ALL of this information together in a single, friendly, and natural question. " +
                 "Do NOT use bare technical terms (e.g., say 'How many people will be traveling?' instead of 'adult count'). " +
                 "Write the question in %s — the same language the user is writing in.%s%s%s%s " +
-                "Return ONLY the question itself, no extra notes.",
+                "Return ONLY the question itself, no extra notes."+
+                "While asking questions use a profesional tone like these examples: 'Great! I'm planning a trip for you. In which city would you like to stay/travel and how many adults and children?'"+
+                "Size yardımcı olabilmem için çocuk/çocukların yaşlarını veya bebeğin yaşını belirtir misiniz?"+
+                "Eğer seyahat için belirlediğiniz bir konum yoksa, hangi şehir veya bölge için rezervasyon planlamak istediğinizi belirtebilir misiniz? Böylelikle size en iyi sonuçları yansıtabilirim."+
+                "For finding the best results for you could you please share kids ages ?",
                 fieldsCsv, targetLanguage, userMessageClause(userMessage), poiInstruction, knownDetailsInstruction, ageInstruction
         );
 
