@@ -108,6 +108,7 @@ class TourvisioBackendApplicationTests {
 				"TRY",
 				List.of(passenger),
 				null,
+				null,
 				null);
 
 		// 1. Create Reservation
@@ -178,6 +179,7 @@ class TourvisioBackendApplicationTests {
 				"TRY",
 				List.of(primary, secondary),
 				null,
+				null,
 				null);
 
 		// 1. Create reservation
@@ -205,6 +207,7 @@ class TourvisioBackendApplicationTests {
 				9000.0,
 				"TRY",
 				List.of(primary, secondary),
+				null,
 				null,
 				null);
 

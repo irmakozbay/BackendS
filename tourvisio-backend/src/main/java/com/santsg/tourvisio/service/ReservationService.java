@@ -130,7 +130,7 @@ public class ReservationService {
         // Send confirmation email
         PassengerRequest primary = request.getPassengers().get(0);
         String fullName = (primary.getFirstName() != null ? primary.getFirstName() : "") + " " + (primary.getLastName() != null ? primary.getLastName() : "");
-        emailService.sendReservationConfirmationEmail(savedReservation, primary.getEmail(), fullName.trim());
+        emailService.sendReservationConfirmationEmail(savedReservation, primary.getEmail(), fullName.trim(), request.getLang());
 
         return savedReservation;
     }
