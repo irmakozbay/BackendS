@@ -239,6 +239,18 @@ public class ChatOrchestrationService {
             incoming = extractor.extract(userMessage, intent, sessionState.getLastRequestedField());
         }
 
+        // Model bazen "belirli bir şehir/il verilmediyse boş bırak" talimatına uymayıp
+        // tüm cümleyi (ör. "Anıtkabir yakınlarında olabilir") konum alanına yazıyor —
+        // TourVisio'da hiçbir zaman eşleşmeyen, garanti "sonuç yok" ile biten bir değer.
+        // Gerçek konum adları kısa olur; 4 kelimeden uzun veya cümle-benzeri ifadeleri
+        // (yakın/civar/olabilir gibi) reddedip null'a çeviriyoruz ki kullanıcıya tekrar
+        // sorulsun.
+        if (incoming != null) {
+            incoming.setLocationOrHotelName(sanitizeLocationField(incoming.getLocationOrHotelName()));
+            incoming.setDepartureLocation(sanitizeLocationField(incoming.getDepartureLocation()));
+            incoming.setArrivalLocation(sanitizeLocationField(incoming.getArrivalLocation()));
+        }
+
         // Handle OUT_OF_SCOPE and UNKNOWN immediately if this is a new search session
         if (!hasActiveSearch) {
             if ("OUT_OF_SCOPE".equals(intent)) {
@@ -495,6 +507,22 @@ public class ChatOrchestrationService {
             return reply;
         }
         return (reply == null || reply.isBlank()) ? note : note + "\n\n" + reply;
+    }
+
+    private static final java.util.regex.Pattern LOCATION_SENTENCE_FILLER = java.util.regex.Pattern.compile(
+            "(?i)yakın|civar|olabilir|istiyorum|istiyoruz|olsun|arıyorum|arıyoruz|lazım|gerek");
+
+    private String sanitizeLocationField(String location) {
+        if (location == null || location.isBlank()) {
+            return location;
+        }
+        String trimmed = location.trim();
+        int wordCount = trimmed.split("\\s+").length;
+        if (wordCount > 4 || LOCATION_SENTENCE_FILLER.matcher(trimmed).find()) {
+            log.warn("[Orchestration] Konum alanı cümle gibi görünüyor, reddediliyor: \"{}\"", trimmed);
+            return null;
+        }
+        return trimmed;
     }
 
     private void adjustIncomingCriteria(SearchCriteria incoming, String lastField, String message) {
