@@ -45,4 +45,6 @@ public class ReservationRequest {
     private String chatSessionId;
 
     private String imageUrl;
+
+    private String lang;
 }
