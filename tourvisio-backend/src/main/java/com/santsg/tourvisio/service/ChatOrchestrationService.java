@@ -939,7 +939,9 @@ public class ChatOrchestrationService {
                 && !searchResponse.getResults().isEmpty()) {
 
             List<?> fullResults = searchResponse.getResults();
-            List<?> slicedResults = fullResults;
+            int totalSize = fullResults.size();
+            int shownCount = Math.min(5, totalSize);
+            List<?> slicedResults = fullResults.subList(0, shownCount);
 
             if (sessionState != null) {
                 // Set AWAITING_CONFIRM mode
@@ -947,21 +949,22 @@ public class ChatOrchestrationService {
                 sessionState.setAllSearchResults(fullResults);
                 sessionState.setResultOffset(0);
                 sessionState.setLastSearchHadNoResults(false);
-
-                int totalSize = fullResults.size();
-                slicedResults = fullResults.subList(0, Math.min(10, totalSize));
                 sessionState.setLastShownResults(slicedResults);
-            } else {
-                int totalSize = fullResults.size();
-                slicedResults = fullResults.subList(0, Math.min(10, totalSize));
             }
 
             // Set sliced results onto the response
-            searchResponse.setResults((List)slicedResults);
+            searchResponse.setResults((List) slicedResults);
 
-            // Sonuçlar zaten kart olarak gösteriliyor — ayrıca metin özeti yazdırmıyoruz
-            // (AI çağrısı da atlanmış oluyor: daha hızlı yanıt, daha az kota kullanımı).
-            finalReply = searchResponse.getReply();
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+                String resultsJson = mapper.writeValueAsString(slicedResults);
+                String defaultReply = searchResponse.getReply();
+                finalReply = responseAgent.summarize(intent, resultsJson, defaultReply, criteria, userMessage, totalSize, shownCount);
+            } catch (Exception e) {
+                log.warn("[Orchestration] AI summarize failed, using default reply: {}", e.getMessage());
+                finalReply = searchResponse.getReply();
+            }
         } else {
             if (sessionState != null) {
                 sessionState.setLastSearchHadNoResults(true);
