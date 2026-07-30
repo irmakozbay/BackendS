@@ -831,7 +831,7 @@ public class ChatOrchestrationService {
         if (message == null || message.isBlank()) {
             return null;
         }
-        String lower = message.toLowerCase(Locale.forLanguageTag("tr-TR"));
+        String lower = message.toLowerCase(Locale.ROOT);
 
         if (lower.matches(".*[а-яА-ЯёЁ].*")) {
             return "Russian";
