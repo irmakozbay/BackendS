@@ -237,4 +237,109 @@ class ChatOrchestrationServiceTest {
                 assertThat(criteria.getCheckOutDate()).isEqualTo(java.time.LocalDate.of(2026, 7, 23));
                 assertThat(response.getSuccess()).isTrue();
         }
+
+        @Test
+        void orchestrate_shouldImmediatelyTerminateOnProfanity() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                when(responseAgent.profanityTerminated(any(), any())).thenReturn("Profanity message terminated.");
+
+                ChatResponse response = service.orchestrate(ChatRequest.builder()
+                                .message("amk bu ne")
+                                .sessionId("session-profanity-test")
+                                .build());
+
+                assertThat(response.getChatStatus()).isEqualTo("TERMINATED");
+                assertThat(response.getSearchType()).isEqualTo("PROFANITY");
+                assertThat(response.getReply()).isEqualTo("Profanity message terminated.");
+        }
+
+        @Test
+        void orchestrate_shouldLockSessionWhenTerminated() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                String sessionId = "session-terminated-lock-test";
+                ChatSessionManager.SessionState state = chatSessionManager.getOrCreateSession(sessionId);
+                state.setChatStatus("TERMINATED");
+
+                when(responseAgent.decline(any(), anyBoolean(), any())).thenReturn("This conversation is terminated.");
+
+                ChatResponse response = service.orchestrate(ChatRequest.builder()
+                                .message("Antalya hotel July 15")
+                                .sessionId(sessionId)
+                                .build());
+
+                assertThat(response.getChatStatus()).isEqualTo("TERMINATED");
+                assertThat(response.getSearchType()).isEqualTo("OUT_OF_SCOPE");
+                assertThat(response.getReply()).isEqualTo("This conversation is terminated.");
+        }
+
+        @Test
+        void orchestrate_shouldProgressivelyWarnOnIrrelevantMessagesAndTerminateOnThird() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
+                                .thenReturn(new ExtractionResult("IRRELEVANT", new SearchCriteria()));
+
+                when(responseAgent.irrelevantWarning(org.mockito.ArgumentMatchers.eq(1), any(), any())).thenReturn("Warning Level 1");
+                when(responseAgent.irrelevantWarning(org.mockito.ArgumentMatchers.eq(2), any(), any())).thenReturn("Warning Level 2");
+                when(responseAgent.irrelevantWarning(org.mockito.ArgumentMatchers.eq(3), any(), any())).thenReturn("Warning Level 3 Terminated");
+
+                String sessionId = "session-irrelevant-test";
+
+                ChatResponse r1 = service.orchestrate(ChatRequest.builder().message("asdljk").sessionId(sessionId).build());
+                assertThat(r1.getChatStatus()).isEqualTo("ACTIVE");
+                assertThat(r1.getReply()).isEqualTo("Warning Level 1");
+
+                ChatResponse r2 = service.orchestrate(ChatRequest.builder().message("???????").sessionId(sessionId).build());
+                assertThat(r2.getChatStatus()).isEqualTo("ACTIVE");
+                assertThat(r2.getReply()).isEqualTo("Warning Level 2");
+
+                ChatResponse r3 = service.orchestrate(ChatRequest.builder().message("zzzzxx").sessionId(sessionId).build());
+                assertThat(r3.getChatStatus()).isEqualTo("TERMINATED");
+                assertThat(r3.getReply()).isEqualTo("Warning Level 3 Terminated");
+        }
 }
+
