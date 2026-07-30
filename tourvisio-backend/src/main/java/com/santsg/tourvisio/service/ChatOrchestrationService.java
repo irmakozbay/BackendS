@@ -909,12 +909,13 @@ public class ChatOrchestrationService {
                     .build();
         }
 
-        log.info("[Orchestration] Executing Search to TourVisio API with Final Criteria: Location={}, CheckIn={}, CheckOut={}, Adults={}, Children={}, ChildAges={}",
+        log.info("[Orchestration] Executing Search to TourVisio API with Final Criteria: Location={}, CheckIn={}, CheckOut={}, Adults={}, Children={}, PassengerCount={}, ChildAges={}",
                 criteria.getLocationOrHotelName(),
                 criteria.getCheckInDate(),
                 criteria.getCheckOutDate(),
                 criteria.getAdultCount(),
                 criteria.getChildCount(),
+                criteria.getPassengerCount(),
                 criteria.getChildAges());
 
         ChatSearchResponse searchResponse;
