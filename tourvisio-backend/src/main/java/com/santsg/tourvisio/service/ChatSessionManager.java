@@ -460,6 +460,7 @@ public class ChatSessionManager {
         }
         String rawQuery = query.trim().toLowerCase();
         String cleanQuery = rawQuery.replaceAll("^(?i)pnr-?", "").trim();
+        String alphaNumQuery = rawQuery.replaceAll("[^a-z0-9]", "");
 
         java.util.Set<String> matchingSessionIdsFromReservations = new java.util.HashSet<>();
         if (reservationRepository != null) {
@@ -468,11 +469,23 @@ public class ChatSessionManager {
                         ? reservationRepository.findByUserId(userId)
                         : reservationRepository.findAll();
                 for (com.santsg.tourvisio.entity.Reservation res : userReservations) {
-                    if (res.getReservationNumber() != null && res.getChatSessionId() != null) {
-                        String resNum = res.getReservationNumber().toLowerCase();
-                        if (resNum.contains(rawQuery) || resNum.contains(cleanQuery) || resNum.replace("pnr-", "").contains(cleanQuery)) {
-                            matchingSessionIdsFromReservations.add(res.getChatSessionId());
-                        }
+                    if (res.getChatSessionId() == null) continue;
+
+                    String resNum = res.getReservationNumber() != null ? res.getReservationNumber().toLowerCase() : "";
+                    String flightNo = res.getFlightNumber() != null ? res.getFlightNumber() : "";
+                    if (flightNo.isBlank() && ("Flight".equalsIgnoreCase(res.getType()) || (res.getItemName() != null && (res.getItemName().toLowerCase().contains("ajet") || res.getItemName().toLowerCase().contains("uçuş") || res.getItemName().toLowerCase().contains("flight"))))) {
+                        String pnrDigits = (res.getReservationNumber() != null ? res.getReservationNumber() : String.valueOf(res.getId())).replaceAll("\\D", "");
+                        int num = pnrDigits.length() >= 2 ? Math.abs(Integer.parseInt(pnrDigits.substring(Math.max(0, pnrDigits.length() - 4))) % 8999) : 2024;
+                        String prefix = (res.getItemName() != null && res.getItemName().toLowerCase().contains("pegasus")) ? "PC" : (res.getItemName() != null && res.getItemName().toLowerCase().contains("thy")) ? "TK" : "VF";
+                        flightNo = prefix + "-" + (1000 + num);
+                    }
+
+                    String alphaNumFlightNo = flightNo.toLowerCase().replaceAll("[^a-z0-9]", "");
+                    boolean matchResNum = !resNum.isEmpty() && (resNum.contains(rawQuery) || resNum.contains(cleanQuery) || resNum.replace("pnr-", "").contains(cleanQuery));
+                    boolean matchFlightNo = !alphaNumFlightNo.isEmpty() && !alphaNumQuery.isEmpty() && (alphaNumFlightNo.contains(alphaNumQuery) || alphaNumQuery.contains(alphaNumFlightNo));
+
+                    if (matchResNum || matchFlightNo) {
+                        matchingSessionIdsFromReservations.add(res.getChatSessionId());
                     }
                 }
             } catch (Exception e) {
