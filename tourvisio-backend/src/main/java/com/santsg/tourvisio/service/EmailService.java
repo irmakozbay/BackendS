@@ -6,7 +6,6 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -21,28 +20,37 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
-    // Brevo üzerinde Onaylı (Verified) olan e-posta adresiniz
-    @Value("${spring.mail.username:sannydestek@gmail.com}")
+    // Brevo üzerinde Onaylı (Verified) olan gönderici e-posta adresiniz
+    @Value("${app.mail.from-address:sannydestek@gmail.com}")
     private String fromAddress;
 
     @Value("${app.mail.from-name:SANNY Travel}")
     private String fromName;
 
     public void sendPasswordResetEmail(String toEmail, String resetLink) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("[EmailService] Cannot send password reset email: recipient email is missing");
+            return;
+        }
+
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom(fromName + " <" + fromAddress + ">");
-            message.setTo(toEmail);
-            message.setSubject("Sanny - Password Reset Request");
-            message.setText("Hello,\n\n"
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, false, "UTF-8");
+
+            helper.setFrom(fromAddress, fromName);
+            helper.setTo(toEmail);
+            helper.setSubject("Sanny - Password Reset Request");
+
+            String content = "Hello,\n\n"
                     + "We received a request to reset your password. "
                     + "Please click the link below to set a new password:\n\n"
                     + resetLink + "\n\n"
                     + "This link will expire in 15 minutes.\n\n"
                     + "If you did not request this, please ignore this email.\n\n"
-                    + "Best regards,\nSanny Team");
+                    + "Best regards,\nSanny Team";
 
-            mailSender.send(message);
+            helper.setText(content, false);
+            mailSender.send(mimeMessage);
             log.info("[EmailService] Password reset email sent successfully to {}", toEmail);
         } catch (Exception e) {
             log.error("[EmailService] Failed to send password reset email to {}: {}", toEmail, e.getMessage(), e);
