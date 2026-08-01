@@ -5,6 +5,7 @@ import com.santsg.tourvisio.entity.Reservation;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -20,10 +21,17 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    // Brevo üzerinde Onaylı (Verified) olan e-posta adresiniz
+    @Value("${spring.mail.username:sannydestek@gmail.com}")
+    private String fromAddress;
+
+    @Value("${app.mail.from-name:SANNY Travel}")
+    private String fromName;
+
     public void sendPasswordResetEmail(String toEmail, String resetLink) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("sannydestek@gmail.com");
+            message.setFrom(fromName + " <" + fromAddress + ">");
             message.setTo(toEmail);
             message.setSubject("Sanny - Password Reset Request");
             message.setText("Hello,\n\n"
@@ -35,8 +43,9 @@ public class EmailService {
                     + "Best regards,\nSanny Team");
 
             mailSender.send(message);
+            log.info("[EmailService] Password reset email sent successfully to {}", toEmail);
         } catch (Exception e) {
-            log.error("[EmailService] Failed to send password reset email: {}", e.getMessage());
+            log.error("[EmailService] Failed to send password reset email to {}: {}", toEmail, e.getMessage(), e);
         }
     }
 
@@ -51,7 +60,7 @@ public class EmailService {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-            helper.setFrom("sannydestek@gmail.com");
+            helper.setFrom(fromAddress, fromName);
             helper.setTo(toEmail);
             helper.setSubject("SANNY - E-posta Doğrulama Kodu [" + otpCode + "]");
 
@@ -105,7 +114,7 @@ public class EmailService {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-            helper.setFrom("sannydestek@gmail.com");
+            helper.setFrom(fromAddress, fromName);
             helper.setTo(recipientEmail);
 
             String subject = getSubjectText(reservation, language);
@@ -117,7 +126,7 @@ public class EmailService {
             mailSender.send(mimeMessage);
             log.info("[EmailService] Asynchronous confirmation email sent successfully for PNR {}", reservation.getReservationNumber());
         } catch (Exception e) {
-            log.error("[EmailService] Failed to send confirmation email for PNR {}: {}", reservation.getReservationNumber(), e.getMessage());
+            log.error("[EmailService] Failed to send confirmation email for PNR {}: {}", reservation.getReservationNumber(), e.getMessage(), e);
         }
     }
 
@@ -293,7 +302,7 @@ public class EmailService {
                 + "    </div>"
                 + "    <div style='background-color: #f1f5f9; padding: 16px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;'>"
                 + "      <p style='margin: 0;'>" + footerLine1 + "</p>"
-                + "      <p style='margin: 4px 0 0 0;'>" + footerLine2 + " <a href='mailto:sannydestek@gmail.com' style='color: #2563eb;'>sannydestek@gmail.com</a></p>"
+                + "      <p style='margin: 4px 0 0 0;'>" + footerLine2 + " <a href='mailto:" + fromAddress + "' style='color: #2563eb;'>" + fromAddress + "</a></p>"
                 + "    </div>"
                 + "  </div>"
                 + "</body>"
