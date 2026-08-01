@@ -536,13 +536,17 @@ public class ResponseAgent {
             }
         }
 
+        String guestsDescription = describeGuestComposition(criteria);
+
         String prompt = String.format(
                 "You are an expert, hospitable, and professional travel consultant.\n" +
-                "The user's travel search has been completed successfully. Here are the search results in JSON format:\n" +
+                "The user's travel search has been completed successfully for the following traveler composition: %s.\n" +
+                "Here are the search results in JSON format:\n" +
                 "Search Type: %s\n" +
                 "Results:\n%s\n\n" +
                 "Write a warm, polite, professional assistant response introducing these options smoothly.\n" +
-                "Adopt a delightful travel consultant tone. Express enthusiasm for helping them plan their trip.\n\n" +
+                "Adopt a delightful travel consultant tone. Express enthusiasm for helping them plan their trip.\n" +
+                "CRITICAL MANDATORY RULE: In your opening intro sentence, you MUST explicitly mention the traveler/passenger count breakdown (%s - e.g. '1 yetişkin, 1 çocuk ve 1 bebek' or '3 yetişkin') alongside the travel date!\n\n" +
                 "CRITICAL PRESENTATION & FORMATTING RULES:\n" +
                 "- For Hotel Search (HOTEL_SEARCH):\n" +
                 "  Present up to top 5 hotels in the list using a clean, well-formatted Markdown Table:\n\n" +
@@ -574,7 +578,7 @@ public class ResponseAgent {
                 "2. ONLY mention facts present in the JSON results (hotel name, stars, location, price, airline, times). If an attribute is missing/null, leave the cell empty without fabricating data.\n" +
                 "3. Never invent nicer names for raw system/sandbox data.\n" +
                 "4. Return ONLY the assistant response itself, no extra notes.",
-                intent, resultsJson, countNote, childNote, targetLanguage, userMessageClause(userMessage)
+                guestsDescription, intent, resultsJson, guestsDescription, countNote, childNote, targetLanguage, userMessageClause(userMessage)
         );
 
         try {
