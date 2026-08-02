@@ -257,7 +257,19 @@ public class ChatOrchestrationService {
             String aiIntent = extractionResult.getIntent();
             if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent) || "OUT_OF_SCOPE".equals(aiIntent)) {
                 intent = aiIntent;
+            } else if ("HOTEL_SEARCH".equals(aiIntent) || "FLIGHT_SEARCH".equals(aiIntent)) {
+                // ExtractionAgent'a mevcut intent zaten bağlam olarak veriliyor ve
+                // "kullanıcı açıkça geçiş yapmadıkça mevcut intent'i koru" talimatı
+                // içeriyor — yani model burada HOTEL_SEARCH/FLIGHT_SEARCH döndürdüyse
+                // ya zaten aynı intent'tir ya da kullanıcı bilinçli olarak diğerine
+                // geçmiştir ("ilk uçağı listele" gibi). Eskiden burada AI'ın kararı
+                // görmezden gelinip eski intent'e zorla geri dönülüyordu, bu da otel
+                // aramasından sonra uçuş isteyen kullanıcıların hiç uçuş sonucu
+                // görememesine yol açıyordu.
+                intent = aiIntent;
             } else {
+                // UNKNOWN veya tanınmayan bir değer — belirsiz mesajlarda mevcut
+                // bağlamı koru.
                 intent = hasActiveSearch ? existingCriteria.getSearchType() : aiIntent;
             }
             incoming = extractionResult.getCriteria();
@@ -409,6 +421,7 @@ public class ChatOrchestrationService {
         // olarak yazılıp sonraki turlarda "hayalet" kriter olarak sızmaya devam ederdi.
         SearchCriteria beforeMerge = existingCriteria.copy();
         existingCriteria.mergeWith(incoming);
+        carryOverCrossIntentFields(existingCriteria, intent);
         applyChildInfantNegation(existingCriteria, userMessage);
         applyExclusiveGuestCountOverride(existingCriteria, userMessage);
         // Bebek/çocuk/yetişkin yaş yeniden-sınıflandırma notu varsa bir kez tüketilir
@@ -610,6 +623,44 @@ public class ChatOrchestrationService {
             return null;
         }
         return trimmed;
+    }
+
+    /**
+     * Otel ve uçuş arasında intent değişince ("ilk uçağı listele" / "ilk oteli
+     * listele" gibi), aynı seyahatin ortak bilgilerini (tarih, yolcu sayısı)
+     * sıfırdan sormak yerine karşı taraftan devralır. Örn. kullanıcı önce
+     * "15 Ağustos gidiş 20 Ağustos dönüş 2 yetişkin" ile uçuş aramışsa, sonra
+     * "ilk oteli listele" dediğinde checkIn/checkOut/adultCount boşsa
+     * departureDate/returnDate/passengerCount'tan doldurulur (ve tersi).
+     */
+    private void carryOverCrossIntentFields(SearchCriteria criteria, String intent) {
+        if (criteria == null) {
+            return;
+        }
+        if ("HOTEL_SEARCH".equals(intent)) {
+            if (criteria.getCheckInDate() == null && criteria.getDepartureDate() != null) {
+                criteria.setCheckInDate(criteria.getDepartureDate());
+            }
+            if (criteria.getCheckOutDate() == null && criteria.getReturnDate() != null) {
+                criteria.setCheckOutDate(criteria.getReturnDate());
+            }
+            if (criteria.getAdultCount() == null && criteria.getPassengerCount() != null) {
+                criteria.setAdultCount(criteria.getPassengerCount());
+            }
+        } else if ("FLIGHT_SEARCH".equals(intent)) {
+            if (criteria.getDepartureDate() == null && criteria.getCheckInDate() != null) {
+                criteria.setDepartureDate(criteria.getCheckInDate());
+            }
+            if (criteria.getReturnDate() == null && criteria.getCheckOutDate() != null) {
+                criteria.setReturnDate(criteria.getCheckOutDate());
+                if (criteria.getTripType() == null || "ONE_WAY".equals(criteria.getTripType())) {
+                    criteria.setTripType("ROUND_TRIP");
+                }
+            }
+            if (criteria.getPassengerCount() == null && criteria.getAdultCount() != null) {
+                criteria.setPassengerCount(criteria.getAdultCount());
+            }
+        }
     }
 
     private void adjustIncomingCriteria(SearchCriteria incoming, String lastField, String message) {
