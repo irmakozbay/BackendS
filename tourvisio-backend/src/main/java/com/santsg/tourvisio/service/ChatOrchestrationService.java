@@ -156,11 +156,12 @@ public class ChatOrchestrationService {
         sessionStore.save(sessionId, existingCriteria);
 
         String userMessage = request.getMessage();
+        String conversationHistory = chatSessionManager.getRecentHistoryFormat(sessionState, 6);
 
         // 2. Oturum sonlandırılmışsa erken çık
         if ("TERMINATED".equals(sessionState.getChatStatus())) {
             return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, true, userMessage))
+                    .reply(responseAgent.decline(existingCriteria, true, userMessage, conversationHistory))
                     .sessionId(sessionId)
                     .searchType("OUT_OF_SCOPE")
                     .missingFields(List.of())
@@ -188,7 +189,7 @@ public class ChatOrchestrationService {
                 sessionState.setMode("BOOKING");
                 sessionState.setSelectedItem(matchedItem);
                 
-                String confirmReply = responseAgent.confirmSelection(matchedItem, existingCriteria, userMessage);
+                String confirmReply = responseAgent.confirmSelection(matchedItem, existingCriteria, userMessage, conversationHistory);
                 return ChatResponse.builder()
                         .reply(confirmReply)
                         .sessionId(sessionId)
@@ -298,7 +299,7 @@ public class ChatOrchestrationService {
         // Handle OUT_OF_SCOPE (Category D - Generic scope reply, ACTIVE session, NO counter increment)
         if ("OUT_OF_SCOPE".equals(intent)) {
             return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, false, userMessage))
+                    .reply(responseAgent.decline(existingCriteria, false, userMessage, conversationHistory))
                     .sessionId(sessionId)
                     .searchType("OUT_OF_SCOPE")
                     .missingFields(List.of())
@@ -319,7 +320,7 @@ public class ChatOrchestrationService {
                         .build();
             }
             return ChatResponse.builder()
-                    .reply(responseAgent.clarify(existingCriteria, userMessage))
+                    .reply(responseAgent.clarify(existingCriteria, userMessage, conversationHistory))
                     .sessionId(sessionId)
                     .searchType("UNKNOWN")
                     .missingFields(List.of())
@@ -426,7 +427,7 @@ public class ChatOrchestrationService {
 
         if (!missingFields.isEmpty()) {
             sessionState.setLastRequestedField(String.join(", ", missingFields));
-            String replyText = responseAgent.askMissing(missingFields, existingCriteria, userMessage);
+            String replyText = responseAgent.askMissing(missingFields, existingCriteria, userMessage, conversationHistory);
             replyText = prependNote(reclassificationNote, replyText);
             return ChatResponse.builder()
                     .reply(replyText)
@@ -464,7 +465,7 @@ public class ChatOrchestrationService {
         }
 
         // 9. Tüm bilgiler tamam → arama servisine yönlendir
-        return readyToSearchResponse(sessionId, intent, existingCriteria, userMessage, reclassificationNote);
+        return readyToSearchResponse(sessionId, intent, existingCriteria, userMessage, reclassificationNote, conversationHistory);
     }
 
     // "sadece 2 yetişkin" / "vazgeçtim 2 yetişkin olsun" gibi münhasırlık/vazgeçme
@@ -936,8 +937,10 @@ public class ChatOrchestrationService {
             String intent,
             SearchCriteria criteria,
             String userMessage,
-            String reclassificationNote) {
-
+            String reclassificationNote,
+            String conversationHistory) {
+        
+        // ... (Guardrail check) ...
         // Guardrail Interceptor: Çocuk var ama yaşlar eksikse arama tetiklenemez
         if ("HOTEL_SEARCH".equals(intent) && criteria.getChildCount() != null && criteria.getChildCount() > 0
                 && (criteria.getChildAges() == null || criteria.getChildAges().isEmpty() || criteria.getChildAges().size() != criteria.getChildCount())) {
@@ -1007,7 +1010,7 @@ public class ChatOrchestrationService {
                 mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
                 String resultsJson = mapper.writeValueAsString(slicedResults);
                 String defaultReply = searchResponse.getReply();
-                finalReply = responseAgent.summarize(intent, resultsJson, defaultReply, criteria, userMessage, totalSize, shownCount);
+                finalReply = responseAgent.summarize(intent, resultsJson, defaultReply, criteria, userMessage, totalSize, shownCount, conversationHistory);
             } catch (Exception e) {
                 log.warn("[Orchestration] AI summarize failed, using default reply: {}", e.getMessage());
                 finalReply = searchResponse.getReply();
