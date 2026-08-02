@@ -160,8 +160,22 @@ public class ChatOrchestrationService {
 
         // 2. Oturum sonlandırılmışsa erken çık
         if ("TERMINATED".equals(sessionState.getChatStatus())) {
+            String lang = existingCriteria != null && existingCriteria.getPreferredLanguage() != null 
+                    ? existingCriteria.getPreferredLanguage().toLowerCase() 
+                    : "tr";
+            String reply;
+            if (lang.contains("en")) {
+                reply = "This chat has been closed. Please start a new chat.";
+            } else if (lang.contains("de")) {
+                reply = "Dieser Chat wurde geschlossen. Bitte starten Sie einen neuen Chat.";
+            } else if (lang.contains("ru")) {
+                reply = "Этот чат закрыт. Пожалуйста, начните новый чат.";
+            } else {
+                reply = "Bu sohbet sonlandırılmıştır. Lütfen yeni bir sohbet başlatın.";
+            }
+
             return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, true, userMessage, conversationHistory))
+                    .reply(reply)
                     .sessionId(sessionId)
                     .searchType("OUT_OF_SCOPE")
                     .missingFields(List.of())
@@ -282,28 +296,54 @@ public class ChatOrchestrationService {
                     .build();
         }
 
-        // Handle IRRELEVANT (Category C - Progressive 3-level warnings)
-        if ("IRRELEVANT".equals(intent)) {
+        // Handle IRRELEVANT or OUT_OF_SCOPE (Progressive 3-level warnings/decline)
+        if ("IRRELEVANT".equals(intent) || "OUT_OF_SCOPE".equals(intent)) {
             int warningLevel = sessionState.incrementIrrelevantCount();
             String chatStatus = sessionState.getChatStatus();
-            String reply = responseAgent.irrelevantWarning(warningLevel, existingCriteria, userMessage);
+            
+            String reply;
+            String lang = existingCriteria != null && existingCriteria.getPreferredLanguage() != null 
+                    ? existingCriteria.getPreferredLanguage().toLowerCase() 
+                    : "tr";
+            
+            if (chatStatus.equals("TERMINATED") || warningLevel >= 3) {
+                if (lang.contains("en")) {
+                    reply = "I apologize, but I can only assist with hotel and flight bookings. Due to too many off-topic messages, this conversation has been closed. Please start a new chat. 😊";
+                } else if (lang.contains("de")) {
+                    reply = "Es tut mir leid, aber ich kann Ihnen nur bei Hotel- und Flugbuchungen helfen. Aufgrund zu vieler unpassender Nachrichten wurde dieser Chat beendet. Bitte starten Sie einen neuen Chat. 😊";
+                } else if (lang.contains("ru")) {
+                    reply = "Извините, но я могу помочь только с бронированием отелей и авиабилетов. Этот чат был закрыт из-за слишком большого количества сообщений не по теме. Пожалуйста, начните новый чат. 😊";
+                } else {
+                    reply = "Üzgünüm, sadece otel ve uçak rezervasyonları hakkında yardımcı olabiliyorum. Alakasız talepleriniz nedeniyle bu sohbet sonlandırılmıştır. Lütfen yeni bir sohbet başlatın. 😊";
+                }
+            } else {
+                String baseReply;
+                if ("OUT_OF_SCOPE".equals(intent)) {
+                    baseReply = responseAgent.decline(existingCriteria, false, userMessage, conversationHistory);
+                } else {
+                    baseReply = responseAgent.irrelevantWarning(warningLevel, existingCriteria, userMessage);
+                }
+                
+                int remaining = 3 - warningLevel;
+                String suffix;
+                if (lang.contains("en")) {
+                    suffix = "\n\n(Note: Please only ask questions related to hotel or flight bookings. If you continue with off-topic messages, this chat will be closed. Remaining warning rights: " + remaining + ")";
+                } else if (lang.contains("de")) {
+                    suffix = "\n\n(Hinweis: Bitte stellen Sie nur Fragen zu Hotel- oder Flugbuchungen. Wenn Sie mit unpassenden Nachrichten fortfahren, wird dieser Chat geschlossen. Verbleibende Versuche: " + remaining + ")";
+                } else if (lang.contains("ru")) {
+                    suffix = "\n\n(Примечание: Пожалуйста, задавайте вопросы только о бронировании отелей или авиабилетов. Если вы продолжите писать не по теме, чат будет закрыт. Осталось попыток: " + remaining + ")";
+                } else {
+                    suffix = "\n\n(Not: Lütfen sadece otel ve uçuş rezervasyonlarıyla ilgili sorular sorun. Alakasız sorulara devam ederseniz bu sohbet sonlandırılacaktır. Kalan hak: " + remaining + ")";
+                }
+                reply = baseReply + suffix;
+            }
+
             return ChatResponse.builder()
                     .reply(reply)
                     .sessionId(sessionId)
-                    .searchType("IRRELEVANT")
+                    .searchType(intent)
                     .missingFields(List.of())
                     .chatStatus(chatStatus)
-                    .build();
-        }
-
-        // Handle OUT_OF_SCOPE (Category D - Generic scope reply, ACTIVE session, NO counter increment)
-        if ("OUT_OF_SCOPE".equals(intent)) {
-            return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, false, userMessage, conversationHistory))
-                    .sessionId(sessionId)
-                    .searchType("OUT_OF_SCOPE")
-                    .missingFields(List.of())
-                    .chatStatus(sessionState.getChatStatus())
                     .build();
         }
 
