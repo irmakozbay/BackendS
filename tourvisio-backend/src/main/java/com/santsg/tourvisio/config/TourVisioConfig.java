@@ -68,6 +68,24 @@ public class TourVisioConfig {
                 && !isBlank(password);
     }
 
+    @jakarta.annotation.PostConstruct
+    public void validateOnStartup() {
+        if (!mockMode && !isConfigured()) {
+            org.slf4j.LoggerFactory.getLogger(TourVisioConfig.class).warn(
+                "[TourVisioConfig] WARNING: TourVisio environment credentials are missing or incomplete! " +
+                "baseUrl={}, agency={}, username={}, passwordSet={}. " +
+                "Live searches will fail until TOURVISIO_AGENCY, TOURVISIO_USER/TOURVISIO_USERNAME, and TOURVISIO_PASSWORD environment variables are set.",
+                baseUrl, agency, username, !isBlank(password)
+            );
+        } else {
+            org.slf4j.LoggerFactory.getLogger(TourVisioConfig.class).info(
+                "[TourVisioConfig] Configuration initialized. mockMode={}, baseUrl={}, agency={}, username={}",
+                mockMode, baseUrl, agency, username
+            );
+        }
+    }
+
+
     /**
      * TourVisio API çağrıları için kullanılacak RestTemplate.
      * Authorization header'ı dinamik olarak {@link TourVisioAuthService}

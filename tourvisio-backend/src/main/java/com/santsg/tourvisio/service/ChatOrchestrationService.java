@@ -245,6 +245,8 @@ public class ChatOrchestrationService {
             String aiIntent = extractionResult.getIntent();
             if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent) || "OUT_OF_SCOPE".equals(aiIntent)) {
                 intent = aiIntent;
+            } else if ("HOTEL_SEARCH".equals(aiIntent) || "FLIGHT_SEARCH".equals(aiIntent)) {
+                intent = aiIntent;
             } else {
                 intent = hasActiveSearch ? existingCriteria.getSearchType() : aiIntent;
             }
@@ -254,11 +256,14 @@ public class ChatOrchestrationService {
             String fallbackIntent = intentDetectionService.detectIntent(userMessage);
             if ("PROFANITY".equals(fallbackIntent) || "IRRELEVANT".equals(fallbackIntent) || "OUT_OF_SCOPE".equals(fallbackIntent)) {
                 intent = fallbackIntent;
+            } else if ("HOTEL_SEARCH".equals(fallbackIntent) || "FLIGHT_SEARCH".equals(fallbackIntent)) {
+                intent = fallbackIntent;
             } else {
                 intent = hasActiveSearch ? existingCriteria.getSearchType() : fallbackIntent;
             }
             incoming = extractor.extract(userMessage, intent, sessionState.getLastRequestedField());
         }
+
 
         // Model bazen "belirli bir şehir/il verilmediyse boş bırak" talimatına uymayıp
         // tüm cümleyi (ör. "Anıtkabir yakınlarında olabilir") konum alanına yazıyor —
@@ -370,7 +375,9 @@ public class ChatOrchestrationService {
         // reddedilen bir deneme (ör. "4 yetişkin 3 çocuk 2 bebek") bile kalıcı
         // olarak yazılıp sonraki turlarda "hayalet" kriter olarak sızmaya devam ederdi.
         SearchCriteria beforeMerge = existingCriteria.copy();
+        handleIntentSwitch(existingCriteria, intent);
         existingCriteria.mergeWith(incoming);
+
         applyChildInfantNegation(existingCriteria, userMessage);
         applyExclusiveGuestCountOverride(existingCriteria, userMessage);
         // Bebek/çocuk/yetişkin yaş yeniden-sınıflandırma notu varsa bir kez tüketilir
@@ -1274,4 +1281,71 @@ public class ChatOrchestrationService {
                 .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(criteria))
                 .build();
     }
+
+    private void handleIntentSwitch(SearchCriteria existingCriteria, String newIntent) {
+        if (newIntent == null || !("HOTEL_SEARCH".equals(newIntent) || "FLIGHT_SEARCH".equals(newIntent))) {
+            return;
+        }
+        String oldIntent = existingCriteria.getSearchType();
+        if (oldIntent == null || oldIntent.equals(newIntent)) {
+            existingCriteria.setSearchType(newIntent);
+            return;
+        }
+
+        log.info("[Orchestration] Intent switch detected: {} -> {}", oldIntent, newIntent);
+        existingCriteria.setSearchType(newIntent);
+
+        if ("HOTEL_SEARCH".equals(oldIntent) && "FLIGHT_SEARCH".equals(newIntent)) {
+            // Transfer shared criteria: location -> arrivalLocation, checkIn -> departure, checkOut -> return, adultCount -> passengerCount
+            if (isTextBlank(existingCriteria.getArrivalLocation()) && !isTextBlank(existingCriteria.getLocationOrHotelName())) {
+                existingCriteria.setArrivalLocation(existingCriteria.getLocationOrHotelName());
+            }
+            if (existingCriteria.getDepartureDate() == null && existingCriteria.getCheckInDate() != null) {
+                existingCriteria.setDepartureDate(existingCriteria.getCheckInDate());
+            }
+            if (existingCriteria.getReturnDate() == null && existingCriteria.getCheckOutDate() != null) {
+                existingCriteria.setReturnDate(existingCriteria.getCheckOutDate());
+                existingCriteria.setTripType("ROUND_TRIP");
+                existingCriteria.setAssumedTripType(false);
+            }
+            if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() != null) {
+                existingCriteria.setPassengerCount(existingCriteria.getAdultCount());
+            }
+
+            // Clear hotel-specific fields so they don't leak into flight search
+            existingCriteria.setLocationOrHotelName(null);
+            existingCriteria.setRoomCount(null);
+            existingCriteria.setMinStars(null);
+
+        } else if ("FLIGHT_SEARCH".equals(oldIntent) && "HOTEL_SEARCH".equals(newIntent)) {
+            // Transfer shared criteria: arrivalLocation -> locationOrHotelName, departure -> checkIn, return -> checkOut, passengerCount -> adultCount
+            if (isTextBlank(existingCriteria.getLocationOrHotelName()) && !isTextBlank(existingCriteria.getArrivalLocation())) {
+                existingCriteria.setLocationOrHotelName(existingCriteria.getArrivalLocation());
+            }
+            if (existingCriteria.getCheckInDate() == null && existingCriteria.getDepartureDate() != null) {
+                existingCriteria.setCheckInDate(existingCriteria.getDepartureDate());
+            }
+            if (existingCriteria.getCheckOutDate() == null && existingCriteria.getReturnDate() != null) {
+                existingCriteria.setCheckOutDate(existingCriteria.getReturnDate());
+            }
+            if (existingCriteria.getAdultCount() == null && existingCriteria.getPassengerCount() != null) {
+                existingCriteria.setAdultCount(existingCriteria.getPassengerCount());
+            }
+
+            // Clear flight-specific fields so they don't leak into hotel search
+            existingCriteria.setDepartureLocation(null);
+            existingCriteria.setArrivalLocation(null);
+            existingCriteria.setDepartureDate(null);
+            existingCriteria.setReturnDate(null);
+            existingCriteria.setPassengerCount(null);
+            existingCriteria.setTripType(null);
+            existingCriteria.setAssumedTripType(false);
+            existingCriteria.setAssumedPassengerCount(false);
+        }
+    }
+
+    private boolean isTextBlank(String s) {
+        return s == null || s.isBlank();
+    }
 }
+

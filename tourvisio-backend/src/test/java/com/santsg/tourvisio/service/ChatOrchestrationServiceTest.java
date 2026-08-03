@@ -473,9 +473,11 @@ class ChatOrchestrationServiceTest {
                 criteria.setLocationOrHotelName("Antalya");
                 criteria.setFlexibleDates(true);
                 criteria.setStayNights(4);
+                criteria.setCurrency("TRY");
 
                 when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
                                 .thenReturn(new ExtractionResult("HOTEL_SEARCH", criteria));
+
 
                 com.santsg.tourvisio.dto.HotelSearchResponseItem sampleItem = new com.santsg.tourvisio.dto.HotelSearchResponseItem();
                 sampleItem.setName("Akra Hotel");
@@ -532,9 +534,11 @@ class ChatOrchestrationServiceTest {
                 criteria.setDepartureLocation("Istanbul");
                 criteria.setArrivalLocation("Antalya");
                 criteria.setFlexibleDates(true);
+                criteria.setCurrency("TRY");
 
                 when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
                                 .thenReturn(new ExtractionResult("FLIGHT_SEARCH", criteria));
+
 
                 com.santsg.tourvisio.dto.FlightSearchResponseItem flightItem = com.santsg.tourvisio.dto.FlightSearchResponseItem.builder()
                                 .airline("THY")
@@ -568,7 +572,78 @@ class ChatOrchestrationServiceTest {
                 assertThat(savedCriteria.getAssumedTripType()).isTrue();
                 assertThat(savedCriteria.getDepartureDate()).isNotNull();
         }
+
+        @Test
+        void orchestrate_shouldSwitchIntentFromHotelToFlightSearchAndTransferCriteria() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                String sessionId = "session-intent-switch-test";
+                SearchCriteria initialHotelCriteria = new SearchCriteria();
+                initialHotelCriteria.setSearchType("HOTEL_SEARCH");
+                initialHotelCriteria.setLocationOrHotelName("Antalya");
+                initialHotelCriteria.setCheckInDate(java.time.LocalDate.of(2026, 8, 15));
+                initialHotelCriteria.setCheckOutDate(java.time.LocalDate.of(2026, 8, 20));
+                initialHotelCriteria.setAdultCount(2);
+                initialHotelCriteria.setCurrency("TRY");
+                sessionStore.save(sessionId, initialHotelCriteria);
+
+
+                SearchCriteria incomingFlightCriteria = new SearchCriteria();
+                incomingFlightCriteria.setSearchType("FLIGHT_SEARCH");
+                incomingFlightCriteria.setDepartureLocation("Istanbul");
+
+                when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
+                                .thenReturn(new ExtractionResult("FLIGHT_SEARCH", incomingFlightCriteria));
+
+
+                com.santsg.tourvisio.dto.FlightSearchResponseItem flightItem = com.santsg.tourvisio.dto.FlightSearchResponseItem.builder()
+                                .airline("Pegasus")
+                                .price(1200.0)
+                                .build();
+
+                when(flightSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
+                                .reply("Found flights for Antalya")
+                                .searchType("FLIGHT_SEARCH")
+                                .success(true)
+                                .results(List.of(flightItem))
+                                .build());
+
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+                                .thenReturn("Found flight options for Antalya");
+
+                ChatResponse response = service.orchestrate(ChatRequest.builder()
+                                .message("ilk uçağı listele")
+                                .sessionId(sessionId)
+                                .build());
+
+                assertThat(response).isNotNull();
+                assertThat(response.getSuccess()).isTrue();
+                assertThat(response.getSearchType()).isEqualTo("FLIGHT_SEARCH");
+
+                SearchCriteria updatedCriteria = sessionStore.getOrCreate(sessionId);
+                assertThat(updatedCriteria.getSearchType()).isEqualTo("FLIGHT_SEARCH");
+                assertThat(updatedCriteria.getArrivalLocation()).isEqualTo("Antalya");
+                assertThat(updatedCriteria.getDepartureDate()).isEqualTo(java.time.LocalDate.of(2026, 8, 15));
+                assertThat(updatedCriteria.getReturnDate()).isEqualTo(java.time.LocalDate.of(2026, 8, 20));
+                assertThat(updatedCriteria.getPassengerCount()).isEqualTo(2);
+                assertThat(updatedCriteria.getLocationOrHotelName()).isNull();
+        }
 }
+
 
 
 
