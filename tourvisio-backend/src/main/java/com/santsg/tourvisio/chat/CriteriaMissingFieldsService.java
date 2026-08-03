@@ -38,15 +38,18 @@ public class CriteriaMissingFieldsService {
             if (childAgesPending)                             missing.add("çocuk yaşları");
             if (infantAgesPending)                             missing.add("bebek yaşları");
 
+            boolean isFlexibleDates = Boolean.TRUE.equals(criteria.getFlexibleDates());
+
             if (isBlank(criteria.getLocationOrHotelName())) missing.add("konum veya otel adı");
-            if (criteria.getCheckInDate()  == null)          missing.add("giriş tarihi");
-            if (criteria.getCheckOutDate() == null)          missing.add("çıkış tarihi");
+            if (!isFlexibleDates && criteria.getCheckInDate()  == null)          missing.add("giriş tarihi");
+            if (!isFlexibleDates && criteria.getCheckOutDate() == null)          missing.add("çıkış tarihi");
             if (criteria.getRoomCount() == null)             missing.add("oda sayısı");
             if (criteria.getChildCount() == null)            missing.add("çocuk sayısı");
-            if (!childAgesPending && !infantAgesPending && criteria.getAdultCount() == null) {
+            if (!childAgesPending && !infantAgesPending && !isFlexibleDates && criteria.getAdultCount() == null) {
                 missing.add("yetişkin sayısı");
             }
             if (isBlank(criteria.getCurrency()))              missing.add("para birimi");
+
 
         } else if ("FLIGHT_SEARCH".equals(searchType)) {
             if (isBlank(criteria.getDepartureLocation())) missing.add("kalkış noktası");

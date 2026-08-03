@@ -109,7 +109,10 @@ public class ExtractionAgent {
                     "locationOrHotelName": "city or hotel name (e.g. Antalya). CRITICAL: If the user did not specify a specific city/province/district/country name (e.g. Antalya, Belek, Paris, Istanbul), DO NOT fill this field; leave it null or return an empty string. General POI/amenity names (such as lunapark, plaj, havalimanı, otogar, müze, merkez, beach, theme park, airport, etc.) are NOT city or location names and must NOT be put into this field.",
                     "checkInDate": "check-in date in YYYY-MM-DD format, ONLY if the user's message contains an actual date reference (a specific date, weekday, or relative expression like 'tomorrow'/'yarın'/'next week'). Today's date is %s, used only to resolve relative/partial dates. Handle multiple formats robustly (e.g. '13.6.26' -> '2026-06-13', '13/04/2027', '12-08-2026'). If only month/day (e.g. 15 July, haziran 13) is specified, resolve to the nearest future occurrence using today's date. NEVER output today's date as checkInDate just because no date was mentioned — leave it null/omitted instead.",
                     "checkOutDate": "check-out date in YYYY-MM-DD format. If night count is given, calculate check-out by adding it to check-in. Same 'only if explicitly mentioned' rule as checkInDate applies.",
+                    "flexibleDates": "boolean — true ONLY if the user explicitly indicates flexible/unspecified travel dates (e.g. 'en yakın tarihler', 'anytime', 'ne zaman boşsa', 'kafana göre', 'first available', 'fark etmez', 'sen seç', etc.). Do NOT set true if dates are simply omitted/missing or if relative dates (like 'tomorrow', 'next week') are used.",
+                    "stayNights": "integer — stay duration in nights if the user explicitly specifies how long they want to stay (e.g. '4 gece kalacağım' -> 4, 'stay 4 nights' -> 4). Set null if omitted.",
                     "adultCount": "integer. If the user writes an explicit negative number (e.g. '-3 yetişkin', '-2 adults'), output the negative value AS-IS (e.g. -3) — do NOT silently convert it to its positive/absolute value. A downstream system rejects negative counts and warns the user; it needs to see the real negative number to do that.",
+
                     "hasChildren": "boolean — true if user mentions having children or child ages, false if user explicitly states no children, null if omitted",
                     "childCount": "integer — number of child travelers aged 3 to 12 (inclusive). If the user explicitly says no children, output 0. Same negative-number preservation rule as adultCount applies.",
                     "childAges": "array of integers — ages 3-12, one per child. Required when children are present.",
@@ -177,8 +180,9 @@ public class ExtractionAgent {
                 Return the output strictly as a single JSON object matching the schema. Do not add any markdown blocks (like ```json), notes, or extra text.
                 If some criteria fields are not found in the message, omit them or set them to null.
 
-                %s%s%s%s
+                %s%s%s%s%s
                 CRITICAL LOKASYON / DESTİNASYON KURALI (LOCATION EXTRACTION RULE):
+
                 - Eğer kullanıcı spesifik bir şehir/il/ilçe/ülke adı (örn: Antalya, Belek, Paris, İstanbul) belirtmediyse, 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarını KESİNLİKLE doldurma (null bırak veya boş string dön).
                 - Konaklama süresi / gece sayısı ifadeleri (örn: "5 gece", "3 gün", "5 gece kalacağım", "1 hafta", "night", "stay", vb.) KESİNLİKLE şehir/lokasyon adı DEĞİLDİR. Bu tür süre ifadeleri kesinlikle 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarına YAZILMAMALIDIR.
                 - Genel mekan/ilgi noktası (POI) isimleri (örn: "lunapark", "havalimanı", "müze", "plaj", "merkez", "otogar", "istasyon", "sahil", vb.) şehir veya lokasyon adı DEĞİLDİR. Bu tür genel ifadeler kesinlikle 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarına yazılmamalıdır. Bunlar 'nearby_poi' veya 'search_keywords' parametresi olarak değerlendirilmelidir.
@@ -220,7 +224,9 @@ public class ExtractionAgent {
                     PromptConstants.IRRELEVANT_MESSAGE_GUARDRAIL_RULES,
                     PromptConstants.SERVICE_SCOPE_GUARDRAIL_RULES,
                     PromptConstants.UNKNOWN_MESSAGE_RULES,
+                    PromptConstants.FLEXIBLE_DATE_RULES,
                     ageFieldInstruction, currentCountsContext, todayStr, activeIntentContext, awaitingFieldContext, message, schemaDescription);
+
 
         String response = geminiExtractionClient.complete(prompt);
 

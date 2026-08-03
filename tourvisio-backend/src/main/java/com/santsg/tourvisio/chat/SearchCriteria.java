@@ -44,6 +44,9 @@ public class SearchCriteria {
     private String locationOrHotelName;
     private LocalDate checkInDate;
     private LocalDate checkOutDate;
+    private Boolean flexibleDates = false;
+    private Integer stayNights;
+    private Boolean assumedGuestCount = false;
     private Integer adultCount;
     private Integer childCount = 0;
     private List<Integer> childAges = new ArrayList<>();
@@ -92,6 +95,9 @@ public class SearchCriteria {
         c.locationOrHotelName = this.locationOrHotelName;
         c.checkInDate = this.checkInDate;
         c.checkOutDate = this.checkOutDate;
+        c.flexibleDates = this.flexibleDates;
+        c.stayNights = this.stayNights;
+        c.assumedGuestCount = this.assumedGuestCount;
         c.adultCount = this.adultCount;
         c.childCount = this.childCount;
         c.childAges = this.childAges != null ? new ArrayList<>(this.childAges) : new ArrayList<>();
@@ -137,12 +143,26 @@ public class SearchCriteria {
         // Otel
         if (incoming.getLocationOrHotelName() != null)
             this.locationOrHotelName = incoming.getLocationOrHotelName();
+
+        // Eğer kullanıcı kesin bir giriş/çıkış tarihi belirttiyse, esnek tarih modu otomatik kapanır!
+        if (incoming.getCheckInDate() != null || incoming.getCheckOutDate() != null || incoming.getDepartureDate() != null) {
+            this.flexibleDates = false;
+        } else if (incoming.getFlexibleDates() != null) {
+            this.flexibleDates = incoming.getFlexibleDates();
+        }
+
+        if (incoming.getStayNights() != null)
+            this.stayNights = incoming.getStayNights();
         if (incoming.getCheckInDate() != null)
             this.checkInDate = incoming.getCheckInDate();
         if (incoming.getCheckOutDate() != null)
             this.checkOutDate = incoming.getCheckOutDate();
-        if (incoming.getAdultCount() != null)
+
+        if (incoming.getAdultCount() != null) {
             this.adultCount = incoming.getAdultCount();
+            this.assumedGuestCount = false; // Kullanıcı kendisi belirtti!
+        }
+
         // childAges dolu geldiğinde çocuk sayısı ondan türetilir (tutarlılık için).
         // childCount pozitif bir değer geldiğinde her zaman uygulanır. Açık bir 0
         // ise de, SADECE bu mesaj gerçekten misafir sayısıyla ilgiliyse (aynı anda

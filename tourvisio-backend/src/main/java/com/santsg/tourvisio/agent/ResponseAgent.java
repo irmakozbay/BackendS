@@ -554,6 +554,23 @@ public class ResponseAgent {
 
         String guestsDescription = describeGuestComposition(criteria);
 
+        String flexibleDatesInstruction = "";
+        if (criteria != null && Boolean.TRUE.equals(criteria.getFlexibleDates())) {
+            boolean assumedGuests = Boolean.TRUE.equals(criteria.getAssumedGuestCount());
+            String checkInStr = criteria.getCheckInDate() != null ? formatDisplayDate(criteria.getCheckInDate()) : "?";
+            String checkOutStr = criteria.getCheckOutDate() != null ? formatDisplayDate(criteria.getCheckOutDate()) : "?";
+            flexibleDatesInstruction = String.format(
+                    "\nCRITICAL FLEXIBLE DATES RULE:\n" +
+                    "Since the user specified flexible dates, after presenting the search results table, include a polite transparent note explaining the search assumptions made:\n" +
+                    "- State clearly that the search was conducted for the nearest available dates (%s - %s).\n" +
+                    "%s" +
+                    "- Add ONE concise refinement suggestion at the end offering to change guest count, stay duration, or exact dates if they prefer.\n" +
+                    "NEVER put this assumption note before the search results — always place it AFTER the hotel list.\n",
+                    checkInStr, checkOutStr,
+                    assumedGuests ? "- State clearly that 1 adult was used as the default guest count.\n" : ""
+            );
+        }
+
         String prompt = String.format(
                 "You are an expert, hospitable, and professional travel consultant.\n" +
                 "The user's travel search has been completed successfully for the following traveler composition: %s.\n" +
@@ -588,14 +605,15 @@ public class ResponseAgent {
                 "  At the end of the flight table, ALWAYS include a natural closing sentence:\n" +
                 "  TR for Flight: 'Yandaki panelden uçuş detaylarını inceleyebilirsiniz ✈️ İsterseniz bunları en erken saatli veya en uygun fiyatlı seçeneklere göre sıralayabilirim de.'\n" +
                 "  EN for Flight: 'You can check flight details in the side panel ✈️ If you\\'d like, I can also sort these by earliest departure or best price.'\n\n" +
-                "Include the following context naturally in your response:\n%s%s\n\n" +
+                "Include the following context naturally in your response:\n%s%s%s\n\n" +
                 "IMPORTANT CONSTRAINTS:\n" +
                 "1. Write the response in %s — matching the user's language.%s%s\n" +
                 "2. ONLY mention facts present in the JSON results (hotel name, stars, location, price, airline, times). If an attribute is missing/null, leave the cell empty without fabricating data.\n" +
                 "3. Never invent nicer names for raw system/sandbox data.\n" +
                 "4. Return ONLY the assistant response itself, no extra notes.",
-                guestsDescription, intent, resultsJson, guestsDescription, countNote, childNote, targetLanguage, userMessageClause(userMessage), conversationHistoryClause(conversationHistory)
+                guestsDescription, intent, resultsJson, guestsDescription, countNote, childNote, flexibleDatesInstruction, targetLanguage, userMessageClause(userMessage), conversationHistoryClause(conversationHistory)
         );
+
 
         try {
             String aiResponse = geminiClient.generate(prompt);

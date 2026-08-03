@@ -26,6 +26,8 @@ import java.util.UUID;
 public class ChatOrchestrationService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatOrchestrationService.class);
+    private static final int DEFAULT_FLEXIBLE_DATE_PROBE_DAYS = 15;
+
 
     private final IntentDetectionService intentDetectionService;
     private final ChatSessionManager chatSessionManager;
@@ -422,8 +424,74 @@ public class ChatOrchestrationService {
             }
         }
 
+        // 7.5 Esnek tarih (flexibleDates) modunda varsayılan kişi/tarih atamaları & tarih tarama
+        if ("HOTEL_SEARCH".equals(intent) && Boolean.TRUE.equals(existingCriteria.getFlexibleDates())) {
+            // Eğer yetişkin sayısı daha önce belirtilmediyse varsayılan 1 yetişkin ve 1 oda atanır
+            if (existingCriteria.getAdultCount() == null) {
+                existingCriteria.setAdultCount(1);
+                existingCriteria.setAssumedGuestCount(true);
+            }
+            if (existingCriteria.getRoomCount() == null) {
+                existingCriteria.setRoomCount(1);
+            }
+
+            // Eğer tarihler henüz atanmamışsa 15 günlük pencerede ilk uygun makul sonuç veren tarih bulunur
+            if (existingCriteria.getCheckInDate() == null || existingCriteria.getCheckOutDate() == null) {
+                int stayNights = (existingCriteria.getStayNights() != null && existingCriteria.getStayNights() > 0)
+                        ? existingCriteria.getStayNights() : 2;
+                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate foundCheckIn = null;
+                java.time.LocalDate foundCheckOut = null;
+
+                for (int dayOffset = 0; dayOffset < DEFAULT_FLEXIBLE_DATE_PROBE_DAYS; dayOffset++) {
+                    java.time.LocalDate candidateIn = today.plusDays(dayOffset);
+                    java.time.LocalDate candidateOut = candidateIn.plusDays(stayNights);
+
+                    SearchCriteria probeCriteria = existingCriteria.copy();
+                    probeCriteria.setCheckInDate(candidateIn);
+                    probeCriteria.setCheckOutDate(candidateOut);
+
+                    try {
+                        List<com.santsg.tourvisio.dto.HotelSearchResponseItem> candidateResults = hotelSearchService.searchHotelsRaw(probeCriteria);
+                        if (candidateResults != null && !candidateResults.isEmpty()) {
+                            foundCheckIn = candidateIn;
+                            foundCheckOut = candidateOut;
+                            log.info("[Orchestration] Flexible dates probe success: checkIn={}, checkOut={}, resultsCount={}",
+                                    foundCheckIn, foundCheckOut, candidateResults.size());
+                            break;
+                        }
+                    } catch (Exception e) {
+                        log.warn("[Orchestration] Flexible dates probe attempt failed for date {}: {}", candidateIn, e.getMessage());
+                    }
+                }
+
+                if (foundCheckIn != null) {
+                    existingCriteria.setCheckInDate(foundCheckIn);
+                    existingCriteria.setCheckOutDate(foundCheckOut);
+                } else {
+                    log.warn("[Orchestration] Flexible dates probe found no results in {} days window", DEFAULT_FLEXIBLE_DATE_PROBE_DAYS);
+                    String fallbackReply = "Belirttiğiniz " + DEFAULT_FLEXIBLE_DATE_PROBE_DAYS + " günlük esnek arama penceresinde uygun otel bulunamadı.\n\n" +
+                            "Dilerseniz:\n" +
+                            "1. Aramayı daha geniş bir tarih aralığında tekrarlayabilirim,\n" +
+                            "2. Yakın tarihli farklı alternatiflere bakabiliriz,\n" +
+                            "3. Aramayı farklı bir şehir/destinasyon için güncelleyebilirsiniz.";
+                    return ChatResponse.builder()
+                            .reply(prependNote(reclassificationNote, fallbackReply))
+                            .sessionId(sessionId)
+                            .searchType(intent)
+                            .missingFields(List.of())
+                            .chatStatus("ACTIVE")
+                            .success(false)
+                            .results(List.of())
+                            .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(existingCriteria))
+                            .build();
+                }
+            }
+        }
+
         // 8. Eksik alan kontrolü
         List<String> missingFields = missingFieldsService.getMissingFields(existingCriteria);
+
 
         if (!missingFields.isEmpty()) {
             sessionState.setLastRequestedField(String.join(", ", missingFields));

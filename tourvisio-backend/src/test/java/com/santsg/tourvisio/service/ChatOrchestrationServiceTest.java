@@ -85,8 +85,9 @@ class ChatOrchestrationServiceTest {
                 when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
                                 .thenReturn(new ExtractionResult("HOTEL_SEARCH", criteria));
 
-                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
                                 .thenReturn("Found suitable hotels for Antalya");
+
 
                 when(hotelSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
                                 .reply("Found suitable hotels for Antalya")
@@ -168,8 +169,9 @@ class ChatOrchestrationServiceTest {
                 when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
                                 .thenReturn(new ExtractionResult("HOTEL_SEARCH", new SearchCriteria()));
 
-                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
                                 .thenReturn("Found suitable hotels");
+
 
                 when(hotelSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
                                 .reply("Found suitable hotels")
@@ -219,8 +221,9 @@ class ChatOrchestrationServiceTest {
                 when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
                                 .thenReturn(new ExtractionResult("HOTEL_SEARCH", new SearchCriteria()));
 
-                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt()))
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
                                 .thenReturn("Found suitable hotels");
+
 
                 when(hotelSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
                                 .reply("Found suitable hotels")
@@ -290,7 +293,8 @@ class ChatOrchestrationServiceTest {
                 ChatSessionManager.SessionState state = chatSessionManager.getOrCreateSession(sessionId);
                 state.setChatStatus("TERMINATED");
 
-                when(responseAgent.decline(any(), anyBoolean(), any())).thenReturn("This conversation is terminated.");
+                when(responseAgent.decline(any(), anyBoolean(), any(), any())).thenReturn("This conversation is terminated.");
+
 
                 ChatResponse response = service.orchestrate(ChatRequest.builder()
                                 .message("Antalya hotel July 15")
@@ -446,5 +450,65 @@ class ChatOrchestrationServiceTest {
                 assertThat(savedCriteria3.getPreferredLanguage()).isEqualTo("Turkey");
                 assertThat(com.santsg.tourvisio.util.LocaleResolver.resolveLanguageName(savedCriteria3)).isEqualTo("Turkish");
         }
+
+        @Test
+        void orchestrate_shouldProbeFlexibleDatesAndApplyDefaults() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                SearchCriteria criteria = new SearchCriteria();
+                criteria.setLocationOrHotelName("Antalya");
+                criteria.setFlexibleDates(true);
+                criteria.setStayNights(4);
+
+                when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
+                                .thenReturn(new ExtractionResult("HOTEL_SEARCH", criteria));
+
+                com.santsg.tourvisio.dto.HotelSearchResponseItem sampleItem = new com.santsg.tourvisio.dto.HotelSearchResponseItem();
+                sampleItem.setName("Akra Hotel");
+                sampleItem.setPrice(1000.0);
+                lenient().when(hotelSearchService.searchHotelsRaw(any())).thenReturn(List.of(sampleItem));
+
+                when(hotelSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
+                                .reply("Found flexible hotels")
+                                .searchType("HOTEL_SEARCH")
+                                .success(true)
+                                .results(List.of(sampleItem))
+                                .build());
+
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+                                .thenReturn("Found flexible hotels for Antalya");
+
+                ChatResponse response = service.orchestrate(ChatRequest.builder()
+                                .message("Antalya'da en yakın tarihlerde 4 gece otel")
+                                .sessionId("session-flexible-test")
+                                .build());
+
+                assertThat(response).isNotNull();
+                assertThat(response.getSuccess()).isTrue();
+                assertThat(response.getSearchType()).isEqualTo("HOTEL_SEARCH");
+
+                SearchCriteria savedCriteria = sessionStore.getOrCreate("session-flexible-test");
+                assertThat(savedCriteria.getFlexibleDates()).isTrue();
+                assertThat(savedCriteria.getAdultCount()).isEqualTo(1);
+                assertThat(savedCriteria.getAssumedGuestCount()).isTrue();
+                assertThat(savedCriteria.getCheckInDate()).isNotNull();
+                assertThat(savedCriteria.getCheckOutDate()).isNotNull();
+                assertThat(savedCriteria.getCheckOutDate()).isEqualTo(savedCriteria.getCheckInDate().plusDays(4));
+        }
 }
+
 

@@ -46,4 +46,15 @@ public final class PromptConstants {
         "[MANDATORY RULE — NORMAL CONVERSATION & GREETINGS]\n" +
         "1. Greetings, thanks, or polite chatter (e.g., 'merhaba', 'günaydın', 'teşekkürler', 'tamam', 'hi', 'thanks') are valid conversation messages.\n" +
         "2. Set 'intent' to 'UNKNOWN' for these messages — NEVER set 'intent' to 'IRRELEVANT' or 'PROFANITY' for polite greetings or conversational remarks.\n\n";
+
+    public static final String FLEXIBLE_DATE_RULES =
+        "[MANDATORY RULE — FLEXIBLE DATES VS MISSING DATES]\n" +
+        "1. Recognize explicit flexible date intent when the user delegates date selection to the system.\n" +
+        "   - Turkish expressions: 'en yakın', 'en yakın tarihler', 'ilk uygun', 'ilk uygun tarih', 'uygun olan', 'müsait', 'müsait olan tarihler', 'fark etmez', 'kafana göre', 'sen seç', 'herhangi biri', 'hangi tarih olursa', 'ne zaman boşsa', 'en erken', 'ilk boş tarih', 'müsait ilk tarih', 'uygun tarih', 'ilk müsait'.\n" +
+        "   - English expressions: 'any date', 'whenever', 'whenever available', 'nearest', 'earliest', 'next available', 'nearest available dates', 'soonest', 'first available', 'anytime', 'doesn\\'t matter', 'you choose', 'flexible dates', 'whatever works', 'whatever dates', 'find something soon'.\n" +
+        "2. When flexible date intent is detected, set 'flexibleDates': true and leave 'checkInDate' and 'checkOutDate' as null/omitted. Also extract 'stayNights' if specified (e.g., '4 gece' -> 4).\n" +
+        "3. CRITICAL DISTINCTION: Relative date expressions (such as 'tomorrow'/'yarın', 'next week'/'haftaya'/'önümüzdeki hafta', 'next month'/'gelecek ay') are NOT flexible dates — resolve them to concrete YYYY-MM-DD dates and keep 'flexibleDates': false/null.\n" +
+        "4. Generic phrases like 'fark etmez' or 'any date' should ONLY be classified as flexible dates when they clearly refer to travel dates within the conversation context.\n" +
+        "5. If explicit check-in/check-out dates are provided in the same or a later message, 'flexibleDates' MUST be false.\n\n";
 }
+
