@@ -111,7 +111,7 @@ public class ExtractionAgent {
                     "checkOutDate": "check-out date in YYYY-MM-DD format. If night count is given, calculate check-out by adding it to check-in. Same 'only if explicitly mentioned' rule as checkInDate applies.",
                     "flexibleDates": "boolean — true ONLY if the user explicitly indicates flexible/unspecified travel dates (e.g. 'en yakın tarihler', 'anytime', 'ne zaman boşsa', 'kafana göre', 'first available', 'fark etmez', 'sen seç', etc.). Do NOT set true if dates are simply omitted/missing or if relative dates (like 'tomorrow', 'next week') are used.",
                     "stayNights": "integer — stay duration in nights if the user explicitly specifies how long they want to stay (e.g. '4 gece kalacağım' -> 4, 'stay 4 nights' -> 4). Set null if omitted.",
-                    "adultCount": "integer. If the user writes an explicit negative number (e.g. '-3 yetişkin', '-2 adults'), output the negative value AS-IS (e.g. -3) — do NOT silently convert it to its positive/absolute value. A downstream system rejects negative counts and warns the user; it needs to see the real negative number to do that.",
+                    "adultCount": "integer. ONLY fill if explicitly mentioned by user. Leave null/omitted if unmentioned by user. If the user writes an explicit negative number (e.g. '-3 yetişkin', '-2 adults'), output the negative value AS-IS (e.g. -3) — do NOT silently convert it to its positive/absolute value. A downstream system rejects negative counts and warns the user; it needs to see the real negative number to do that.",
 
                     "hasChildren": "boolean — true if user mentions having children or child ages, false if user explicitly states no children, null if omitted",
                     "childCount": "integer — number of child travelers aged 3 to 12 (inclusive). If the user explicitly says no children, output 0. Same negative-number preservation rule as adultCount applies.",
@@ -130,8 +130,8 @@ public class ExtractionAgent {
                     "arrivalLocation": "arrival location (e.g. Antalya). CRITICAL: Do NOT fill this with general POI/amenity names (such as havalimanı, otogar, etc.) if no specific city/airport is mentioned.",
                     "departureDate": "departure date in YYYY-MM-DD format. Same 'only if explicitly mentioned' rule as checkInDate applies.",
                     "returnDate": "return date in YYYY-MM-DD format. Same 'only if explicitly mentioned' rule as checkOutDate applies.",
-                    "passengerCount": "integer. Same negative-number preservation rule as adultCount applies.",
-                    "tripType": "ONE_WAY" or "ROUND_TRIP",
+                    "passengerCount": "integer or null. ONLY fill if the user explicitly mentioned a passenger count or adult/child count (e.g. '2 kişi', '1 yolcu'). MUST be null if unmentioned by user.",
+                    "tripType": "'ONE_WAY' or 'ROUND_TRIP' or null. ONLY fill if user explicitly said 'tek yön'/'gidiş dönüş' or provided returnDate. MUST be null if unmentioned by user.",
                     "currency": currency (TRY, EUR, USD, GBP)
                   }
                 }
@@ -187,6 +187,9 @@ public class ExtractionAgent {
                 - Eğer kullanıcı spesifik bir şehir/il/ilçe/ülke adı (örn: Antalya, Belek, Paris, İstanbul) belirtmediyse, 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarını KESİNLİKLE doldurma (null bırak veya boş string dön).
                 - Konaklama süresi / gece sayısı ifadeleri (örn: "5 gece", "3 gün", "5 gece kalacağım", "1 hafta", "night", "stay", vb.) KESİNLİKLE şehir/lokasyon adı DEĞİLDİR. Bu tür süre ifadeleri kesinlikle 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarına YAZILMAMALIDIR.
                 - Genel mekan/ilgi noktası (POI) isimleri (örn: "lunapark", "havalimanı", "müze", "plaj", "merkez", "otogar", "istasyon", "sahil", vb.) şehir veya lokasyon adı DEĞİLDİR. Bu tür genel ifadeler kesinlikle 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarına yazılmamalıdır. Bunlar 'nearby_poi' veya 'search_keywords' parametresi olarak değerlendirilmelidir.
+
+                CRITICAL YOLCU VE KİŞİ SAYISI KURALI (PASSENGER & GUEST COUNT RULE):
+                - Eğer kullanıcı mesajında yolcu sayısı, kişi sayısı veya yetişkin/çocuk sayısı KESİNLİKLE belirtilmediyse (örn: "İstanbul'dan Ankara'ya uçak bakıyorum"), 'passengerCount', 'adultCount', 'childCount', 'infantCount' ve 'tripType' alanlarını KESİNLİKLE doldurma (null bırak veya omitted). Kullanıcı açıkça söylemediyse ASLA varsayılan olarak 1 yolcu veya ONE_WAY atama!
 
                 CRITICAL ÇOCUK VE YAŞ AYIKLAMA KURALI (CHILD & AGE EXTRACTION RULE):
                 - Eğer kullanıcı "2 yetişkin 1 çocuk" veya benzeri bir ifade yazarsa, 'adultCount': 2 ve 'childCount': 1 (veya belirtilen sayılar) olarak EKSİKSİZ çıkar. 'hasChildren' değerini true yap.

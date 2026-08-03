@@ -45,17 +45,17 @@ public class SearchCriteriaExtractor {
     // ── Ay adları ──────────────────────────────────────────────────────────
     private static final Map<String, Integer> MONTHS_BY_NAME = Map.ofEntries(
             Map.entry("ocak", 1), Map.entry("january", 1),
-            Map.entry("şubat", 2), Map.entry("february", 2),
+            Map.entry("şubat", 2), Map.entry("subat", 2), Map.entry("february", 2),
             Map.entry("mart", 3), Map.entry("march", 3),
             Map.entry("nisan", 4), Map.entry("april", 4),
-            Map.entry("mayıs", 5), Map.entry("may", 5),
+            Map.entry("mayıs", 5), Map.entry("mayis", 5), Map.entry("may", 5),
             Map.entry("haziran", 6), Map.entry("june", 6),
             Map.entry("temmuz", 7), Map.entry("july", 7),
-            Map.entry("ağustos", 8), Map.entry("august", 8),
-            Map.entry("eylül", 9), Map.entry("september", 9),
+            Map.entry("ağustos", 8), Map.entry("agustos", 8), Map.entry("august", 8),
+            Map.entry("eylül", 9), Map.entry("eylul", 9), Map.entry("september", 9),
             Map.entry("ekim", 10), Map.entry("october", 10),
-            Map.entry("kasım", 11), Map.entry("november", 11),
-            Map.entry("aralık", 12), Map.entry("december", 12));
+            Map.entry("kasım", 11), Map.entry("kasim", 11), Map.entry("november", 11),
+            Map.entry("aralık", 12), Map.entry("aralik", 12), Map.entry("december", 12));
 
     // ── Şehirler ──────────────────────────────────────────────────────────────
     private static final List<String> HOTEL_CITIES = List.of(

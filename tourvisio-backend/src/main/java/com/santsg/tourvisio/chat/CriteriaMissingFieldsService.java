@@ -48,7 +48,6 @@ public class CriteriaMissingFieldsService {
             if (!childAgesPending && !infantAgesPending && !isFlexibleDates && criteria.getAdultCount() == null) {
                 missing.add("yetişkin sayısı");
             }
-            if (isBlank(criteria.getCurrency()))              missing.add("para birimi");
 
 
         } else if ("FLIGHT_SEARCH".equals(searchType)) {
@@ -62,7 +61,6 @@ public class CriteriaMissingFieldsService {
             if ("ROUND_TRIP".equalsIgnoreCase(criteria.getTripType()) && criteria.getReturnDate() == null) {
                 missing.add("dönüş tarihi");
             }
-            if (isBlank(criteria.getCurrency()))          missing.add("para birimi");
         }
 
 

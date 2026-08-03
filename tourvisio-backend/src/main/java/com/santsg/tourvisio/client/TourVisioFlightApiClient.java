@@ -593,8 +593,8 @@ public class TourVisioFlightApiClient {
 
     private List<FlightSearchResponseItem> generateMockFlights(FlightSearchRequest request) {
         List<FlightSearchResponseItem> flights = new ArrayList<>();
-        String currency = request.getCurrency();
-        int pax = request.getPassengerCount();
+        String currency = (request != null && request.getCurrency() != null) ? request.getCurrency() : "TRY";
+        int pax = (request != null && request.getPassengerCount() != null && request.getPassengerCount() > 0) ? request.getPassengerCount() : 1;
 
         flights.add(FlightSearchResponseItem.builder()
                 .airline("Turkish Airlines")

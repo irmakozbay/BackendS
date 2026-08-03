@@ -19,6 +19,17 @@ public class IntentDetectionService {
     public IntentDetectionService() {
     }
 
+    public boolean isExplicitUnsupportedService(String userMessage) {
+        if (userMessage == null) return false;
+        String lowerMsg = userMessage.toLowerCase(Locale.forLanguageTag("tr-TR"));
+        for (String keyword : UNSUPPORTED_SERVICE_KEYWORDS) {
+            if (lowerMsg.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public String detectIntent(String userMessage) {
         if (userMessage == null || userMessage.trim().isEmpty()) {
             return "UNKNOWN";

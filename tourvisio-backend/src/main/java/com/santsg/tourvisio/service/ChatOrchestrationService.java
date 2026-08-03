@@ -190,7 +190,7 @@ public class ChatOrchestrationService {
                 // Selection recognized!
                 sessionState.setMode("BOOKING");
                 sessionState.setSelectedItem(matchedItem);
-                
+
                 String confirmReply = responseAgent.confirmSelection(matchedItem, existingCriteria, userMessage, conversationHistory);
                 return ChatResponse.builder()
                         .reply(confirmReply)
@@ -216,15 +216,15 @@ public class ChatOrchestrationService {
         ExtractionResult extractionResult = null;
 
         // 3.5 Pagination (More Results) Check
-        if ("AWAITING_CONFIRM".equals(sessionState.getMode()) && 
+        if ("AWAITING_CONFIRM".equals(sessionState.getMode()) &&
             sessionState.getAllSearchResults() != null && !sessionState.getAllSearchResults().isEmpty()) {
-            
+
             String lowerMsg = userMessage.toLowerCase(Locale.forLanguageTag("tr-TR"));
             boolean isMoreRequest = lowerMsg.contains("başka seçenek") || lowerMsg.contains("başka otel") || lowerMsg.contains("başka uçuş")
                     || lowerMsg.contains("başka var mı") || lowerMsg.contains("diğer seçenek") || lowerMsg.contains("diğerlerini")
-                    || lowerMsg.contains("daha fazla") || lowerMsg.contains("show more") || lowerMsg.contains("more results") 
+                    || lowerMsg.contains("daha fazla") || lowerMsg.contains("show more") || lowerMsg.contains("more results")
                     || lowerMsg.contains("other options") || lowerMsg.contains("more options");
-                    
+
             if (isMoreRequest) {
                 return paginateResults(sessionId, sessionState, existingCriteria, userMessage);
             }
@@ -243,8 +243,14 @@ public class ChatOrchestrationService {
         if (extractionResult != null) {
             // Happy path: AI extracted intent and criteria
             String aiIntent = extractionResult.getIntent();
-            if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent) || "OUT_OF_SCOPE".equals(aiIntent)) {
+            if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent)) {
                 intent = aiIntent;
+            } else if ("OUT_OF_SCOPE".equals(aiIntent)) {
+                if (hasActiveSearch && !intentDetectionService.isExplicitUnsupportedService(userMessage)) {
+                    intent = existingCriteria.getSearchType();
+                } else {
+                    intent = aiIntent;
+                }
             } else if ("HOTEL_SEARCH".equals(aiIntent) || "FLIGHT_SEARCH".equals(aiIntent)) {
                 intent = aiIntent;
             } else {
@@ -254,8 +260,14 @@ public class ChatOrchestrationService {
         } else {
             // Fallback path: Orchestrator-managed local rule-based pipeline
             String fallbackIntent = intentDetectionService.detectIntent(userMessage);
-            if ("PROFANITY".equals(fallbackIntent) || "IRRELEVANT".equals(fallbackIntent) || "OUT_OF_SCOPE".equals(fallbackIntent)) {
+            if ("PROFANITY".equals(fallbackIntent) || "IRRELEVANT".equals(fallbackIntent)) {
                 intent = fallbackIntent;
+            } else if ("OUT_OF_SCOPE".equals(fallbackIntent)) {
+                if (hasActiveSearch && !intentDetectionService.isExplicitUnsupportedService(userMessage)) {
+                    intent = existingCriteria.getSearchType();
+                } else {
+                    intent = fallbackIntent;
+                }
             } else if ("HOTEL_SEARCH".equals(fallbackIntent) || "FLIGHT_SEARCH".equals(fallbackIntent)) {
                 intent = fallbackIntent;
             } else {
@@ -982,7 +994,7 @@ public class ChatOrchestrationService {
         if (hasUnambiguousGermanChars) {
             return "German";
         }
-        
+
         // ö and ü are shared between Turkish and German. We don't eagerly return here to avoid false positives.
 
         String[] tokens = lower.split("[^a-zçğıöşüäßа-яё0-9]+");
@@ -990,7 +1002,7 @@ public class ChatOrchestrationService {
         int englishHits = 0;
         int germanHits = 0;
         int russianHits = 0;
-        
+
         for (String token : tokens) {
             if (TURKISH_WORDS.contains(token)) turkishHits++;
             if (ENGLISH_WORDS.contains(token)) englishHits++;
@@ -1002,7 +1014,7 @@ public class ChatOrchestrationService {
         if (hasLoneDotlessI) {
             turkishHits++;
         }
-        
+
         boolean hasSharedUmlauts = lower.chars().anyMatch(c -> c == 'ö' || c == 'ü');
         if (hasSharedUmlauts) {
             if (germanHits > turkishHits) germanHits++;
@@ -1010,14 +1022,14 @@ public class ChatOrchestrationService {
         }
 
         int maxHits = Math.max(Math.max(turkishHits, englishHits), Math.max(germanHits, russianHits));
-        
+
         if (maxHits == 0) return null;
-        
+
         if (maxHits == turkishHits) return "Turkish";
         if (maxHits == germanHits) return "German";
         if (maxHits == russianHits) return "Russian";
         if (maxHits == englishHits) return "English";
-        
+
         return null;
     }
 
@@ -1074,7 +1086,7 @@ public class ChatOrchestrationService {
             String userMessage,
             String reclassificationNote,
             String conversationHistory) {
-        
+
         // ... (Guardrail check) ...
         // Guardrail Interceptor: Çocuk var ama yaşlar eksikse arama tetiklenemez
         if ("HOTEL_SEARCH".equals(intent) && criteria.getChildCount() != null && criteria.getChildCount() > 0
@@ -1205,14 +1217,14 @@ public class ChatOrchestrationService {
         if (userMessage == null || userMessage.isBlank() || lastResults == null) {
             return null;
         }
-        
+
         String cleanUserMsg = userMessage.toLowerCase(Locale.forLanguageTag("tr-TR"))
             .replace("hoteli", "")
             .replace("oteli", "")
             .replace("hotel", "")
             .replace("otel", "")
             .trim();
-            
+
         for (Object item : lastResults) {
             String itemName = "";
             if (item instanceof com.santsg.tourvisio.dto.HotelSearchResponseItem) {
@@ -1220,7 +1232,7 @@ public class ChatOrchestrationService {
             } else if (item instanceof com.santsg.tourvisio.dto.FlightSearchResponseItem) {
                 itemName = ((com.santsg.tourvisio.dto.FlightSearchResponseItem) item).getAirline();
             }
-            
+
             if (itemName != null && !itemName.isBlank()) {
                 String cleanItemName = itemName.toLowerCase(Locale.forLanguageTag("tr-TR"));
                 if (userMessage.toLowerCase(Locale.forLanguageTag("tr-TR")).contains(cleanItemName) || cleanItemName.contains(cleanUserMsg)) {
@@ -1348,4 +1360,3 @@ public class ChatOrchestrationService {
         return s == null || s.isBlank();
     }
 }
-
