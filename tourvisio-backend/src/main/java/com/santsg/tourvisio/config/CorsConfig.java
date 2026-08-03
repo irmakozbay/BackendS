@@ -28,8 +28,6 @@ public class CorsConfig implements WebMvcConfigurer {
         registry.addInterceptor(userAuthInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
-                        "/api/auth/**",
-                        "/api/authenticationservice/login",
                         "/api/health",
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
