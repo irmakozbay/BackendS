@@ -56,5 +56,16 @@ public final class PromptConstants {
         "3. CRITICAL DISTINCTION: Relative date expressions (such as 'tomorrow'/'yarın', 'next week'/'haftaya'/'önümüzdeki hafta', 'next month'/'gelecek ay') are NOT flexible dates — resolve them to concrete YYYY-MM-DD dates and keep 'flexibleDates': false/null.\n" +
         "4. Generic phrases like 'fark etmez' or 'any date' should ONLY be classified as flexible dates when they clearly refer to travel dates within the conversation context.\n" +
         "5. If explicit check-in/check-out dates are provided in the same or a later message, 'flexibleDates' MUST be false.\n\n";
+
+    public static final String FLIGHT_FLEXIBLE_DATE_RULES =
+        "[MANDATORY RULE — FLIGHT FLEXIBLE DATES & GUARDRAILS]\n" +
+        "1. Recognize explicit flexible flight departure date intent when the user delegates date selection to the system.\n" +
+        "   - Turkish expressions: 'en yakın tarih', 'ilk uygun uçuş', 'ilk müsait', 'uygun olan', 'fark etmez', 'ne zaman varsa', 'sen seç', 'kafana göre', 'herhangi bir tarih olur', 'en erken uçuş'.\n" +
+        "   - English expressions: 'any date', 'first available', 'next available', 'whenever available', 'flexible dates', 'doesn\\'t matter', 'you choose', 'whenever', 'soonest flight'.\n" +
+        "2. When flexible flight date intent is detected, set 'flexibleDates': true and leave 'departureDate' and 'returnDate' as null/omitted.\n" +
+        "3. CRITICAL GUARDRAIL: Do NOT invent optional unrequested preferences such as specific airline, cabin class, baggage allowance, layover preference, departure time of day, or airport unless explicitly specified by the user.\n" +
+        "4. CRITICAL DISTINCTION: Relative date expressions (such as 'tomorrow'/'yarın', 'next week'/'haftaya'/'önümüzdeki hafta') are NOT flexible dates — resolve them to concrete dates and set 'flexibleDates': false/null.\n" +
+        "5. If explicit departure or return dates are provided in the message or later, 'flexibleDates' MUST be false.\n\n";
 }
+
 

@@ -180,8 +180,9 @@ public class ExtractionAgent {
                 Return the output strictly as a single JSON object matching the schema. Do not add any markdown blocks (like ```json), notes, or extra text.
                 If some criteria fields are not found in the message, omit them or set them to null.
 
-                %s%s%s%s%s
+                %s%s%s%s%s%s
                 CRITICAL LOKASYON / DESTİNASYON KURALI (LOCATION EXTRACTION RULE):
+
 
                 - Eğer kullanıcı spesifik bir şehir/il/ilçe/ülke adı (örn: Antalya, Belek, Paris, İstanbul) belirtmediyse, 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarını KESİNLİKLE doldurma (null bırak veya boş string dön).
                 - Konaklama süresi / gece sayısı ifadeleri (örn: "5 gece", "3 gün", "5 gece kalacağım", "1 hafta", "night", "stay", vb.) KESİNLİKLE şehir/lokasyon adı DEĞİLDİR. Bu tür süre ifadeleri kesinlikle 'locationOrHotelName', 'departureLocation' veya 'arrivalLocation' alanlarına YAZILMAMALIDIR.
@@ -225,7 +226,9 @@ public class ExtractionAgent {
                     PromptConstants.SERVICE_SCOPE_GUARDRAIL_RULES,
                     PromptConstants.UNKNOWN_MESSAGE_RULES,
                     PromptConstants.FLEXIBLE_DATE_RULES,
+                    PromptConstants.FLIGHT_FLEXIBLE_DATE_RULES,
                     ageFieldInstruction, currentCountsContext, todayStr, activeIntentContext, awaitingFieldContext, message, schemaDescription);
+
 
 
         String response = geminiExtractionClient.complete(prompt);

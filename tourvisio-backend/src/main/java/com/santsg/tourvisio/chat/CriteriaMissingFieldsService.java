@@ -52,16 +52,19 @@ public class CriteriaMissingFieldsService {
 
 
         } else if ("FLIGHT_SEARCH".equals(searchType)) {
+            boolean isFlexibleDates = Boolean.TRUE.equals(criteria.getFlexibleDates());
+
             if (isBlank(criteria.getDepartureLocation())) missing.add("kalkış noktası");
             if (isBlank(criteria.getArrivalLocation()))   missing.add("varış noktası");
-            if (criteria.getDepartureDate()  == null)     missing.add("gidiş tarihi");
-            if (criteria.getPassengerCount() == null)     missing.add("yolcu sayısı");
-            if (isBlank(criteria.getTripType()))          missing.add("tek yön / gidiş-dönüş");
+            if (!isFlexibleDates && criteria.getDepartureDate()  == null)     missing.add("gidiş tarihi");
+            if (!isFlexibleDates && criteria.getPassengerCount() == null)     missing.add("yolcu sayısı");
+            if (!isFlexibleDates && isBlank(criteria.getTripType()))          missing.add("tek yön / gidiş-dönüş");
             if ("ROUND_TRIP".equalsIgnoreCase(criteria.getTripType()) && criteria.getReturnDate() == null) {
                 missing.add("dönüş tarihi");
             }
             if (isBlank(criteria.getCurrency()))          missing.add("para birimi");
         }
+
 
         return missing;
     }

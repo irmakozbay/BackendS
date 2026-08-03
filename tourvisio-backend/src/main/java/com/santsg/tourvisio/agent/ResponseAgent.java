@@ -556,20 +556,46 @@ public class ResponseAgent {
 
         String flexibleDatesInstruction = "";
         if (criteria != null && Boolean.TRUE.equals(criteria.getFlexibleDates())) {
-            boolean assumedGuests = Boolean.TRUE.equals(criteria.getAssumedGuestCount());
-            String checkInStr = criteria.getCheckInDate() != null ? formatDisplayDate(criteria.getCheckInDate()) : "?";
-            String checkOutStr = criteria.getCheckOutDate() != null ? formatDisplayDate(criteria.getCheckOutDate()) : "?";
-            flexibleDatesInstruction = String.format(
-                    "\nCRITICAL FLEXIBLE DATES RULE:\n" +
-                    "Since the user specified flexible dates, after presenting the search results table, include a polite transparent note explaining the search assumptions made:\n" +
-                    "- State clearly that the search was conducted for the nearest available dates (%s - %s).\n" +
-                    "%s" +
-                    "- Add ONE concise refinement suggestion at the end offering to change guest count, stay duration, or exact dates if they prefer.\n" +
-                    "NEVER put this assumption note before the search results — always place it AFTER the hotel list.\n",
-                    checkInStr, checkOutStr,
-                    assumedGuests ? "- State clearly that 1 adult was used as the default guest count.\n" : ""
-            );
+            boolean isFlight = "FLIGHT_SEARCH".equalsIgnoreCase(intent);
+            if (isFlight) {
+                boolean assumedPax = Boolean.TRUE.equals(criteria.getAssumedPassengerCount());
+                boolean assumedTrip = Boolean.TRUE.equals(criteria.getAssumedTripType());
+                String depDateStr = criteria.getDepartureDate() != null ? formatDisplayDate(criteria.getDepartureDate()) : "?";
+                String returnDateStr = criteria.getReturnDate() != null ? formatDisplayDate(criteria.getReturnDate()) : null;
+                String dateRangeStr = returnDateStr != null ? depDateStr + " - " + returnDateStr : depDateStr;
+
+                java.util.List<String> assumptionDetails = new java.util.ArrayList<>();
+
+                if (assumedPax) assumptionDetails.add("1 yetişkin");
+                if (assumedTrip) assumptionDetails.add("Tek Yön");
+                String assumptionsText = assumptionDetails.isEmpty() ? "" : "- State clearly that default settings of (" + String.join(", ", assumptionDetails) + ") were used.\n";
+
+                flexibleDatesInstruction = String.format(
+                        "\nCRITICAL FLEXIBLE DATES RULE FOR FLIGHTS:\n" +
+                        "Since the user specified flexible flight dates, after presenting the flight search results table, include a polite transparent note explaining the search assumptions made:\n" +
+                        "- State clearly that the search was conducted for the nearest available flight date (%s).\n" +
+                        "%s" +
+                        "- Add ONE concise refinement suggestion at the end: 'Aramanızı farklı tarihler, kişi sayısı veya gidiş-dönüş seçeneğiyle yeniden yapmamı isterseniz söylemeniz yeterli.'\n" +
+                        "NEVER put this assumption note before the flight results — always place it AFTER the flight list.\n",
+                        dateRangeStr, assumptionsText
+                );
+            } else {
+                boolean assumedGuests = Boolean.TRUE.equals(criteria.getAssumedGuestCount());
+                String checkInStr = criteria.getCheckInDate() != null ? formatDisplayDate(criteria.getCheckInDate()) : "?";
+                String checkOutStr = criteria.getCheckOutDate() != null ? formatDisplayDate(criteria.getCheckOutDate()) : "?";
+                flexibleDatesInstruction = String.format(
+                        "\nCRITICAL FLEXIBLE DATES RULE FOR HOTELS:\n" +
+                        "Since the user specified flexible hotel dates, after presenting the search results table, include a polite transparent note explaining the search assumptions made:\n" +
+                        "- State clearly that the search was conducted for the nearest available dates (%s - %s).\n" +
+                        "%s" +
+                        "- Add ONE concise refinement suggestion at the end offering to change guest count, stay duration, or exact dates if they prefer.\n" +
+                        "NEVER put this assumption note before the search results — always place it AFTER the hotel list.\n",
+                        checkInStr, checkOutStr,
+                        assumedGuests ? "- State clearly that 1 adult was used as the default guest count.\n" : ""
+                );
+            }
         }
+
 
         String prompt = String.format(
                 "You are an expert, hospitable, and professional travel consultant.\n" +

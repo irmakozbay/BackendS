@@ -73,8 +73,10 @@ public class SearchCriteria {
     private LocalDate departureDate;
     private LocalDate returnDate;
     private Integer passengerCount;
+    private Boolean assumedPassengerCount = false;
     /** ONE_WAY | ROUND_TRIP */
     private String tripType;
+    private Boolean assumedTripType = false;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Copy helper
@@ -110,12 +112,15 @@ public class SearchCriteria {
         c.departureDate = this.departureDate;
         c.returnDate = this.returnDate;
         c.passengerCount = this.passengerCount;
+        c.assumedPassengerCount = this.assumedPassengerCount;
         c.tripType = this.tripType;
+        c.assumedTripType = this.assumedTripType;
         c.maxPrice = this.maxPrice;
         c.minPrice = this.minPrice;
         c.minStars = this.minStars;
         return c;
     }
+
 
     // ──────────────────────────────────────────────────────────────────────────
     // Merge helper
@@ -205,18 +210,27 @@ public class SearchCriteria {
             this.arrivalLocation = incoming.getArrivalLocation();
         if (incoming.getDepartureDate() != null)
             this.departureDate = incoming.getDepartureDate();
-        if (incoming.getReturnDate() != null)
+        if (incoming.getReturnDate() != null) {
             this.returnDate = incoming.getReturnDate();
-        if (incoming.getPassengerCount() != null)
+            // Kullanıcı dönüş tarihi belirttiğinde yolculuk tipi otomatik GİDİŞ-DÖNÜŞ olur!
+            this.tripType = "ROUND_TRIP";
+            this.assumedTripType = false;
+        }
+        if (incoming.getPassengerCount() != null) {
             this.passengerCount = incoming.getPassengerCount();
-        if (incoming.getTripType() != null)
+            this.assumedPassengerCount = false;
+        }
+        if (incoming.getTripType() != null) {
             this.tripType = incoming.getTripType();
+            this.assumedTripType = false;
+        }
         if (incoming.getMaxPrice() != null)
             this.maxPrice = incoming.getMaxPrice();
         if (incoming.getMinPrice() != null)
             this.minPrice = incoming.getMinPrice();
         if (incoming.getMinStars() != null)
             this.minStars = incoming.getMinStars();
+
 
         reconcileAgeBuckets();
     }

@@ -509,6 +509,66 @@ class ChatOrchestrationServiceTest {
                 assertThat(savedCriteria.getCheckOutDate()).isNotNull();
                 assertThat(savedCriteria.getCheckOutDate()).isEqualTo(savedCriteria.getCheckInDate().plusDays(4));
         }
+
+        @Test
+        void orchestrate_shouldProbeFlexibleDatesAndApplyDefaultsForFlightSearch() {
+                ChatSessionManager chatSessionManager = new ChatSessionManager();
+                ChatSessionStore sessionStore = new ChatSessionStore();
+                SearchCriteriaExtractor extractor = new SearchCriteriaExtractor();
+                CriteriaMissingFieldsService missingFieldsService = new CriteriaMissingFieldsService();
+
+                ChatOrchestrationService service = new ChatOrchestrationService(
+                                intentDetectionService,
+                                chatSessionManager,
+                                sessionStore,
+                                extractor,
+                                missingFieldsService, criteriaValidator,
+                                extractionAgent,
+                                responseAgent,
+                                hotelSearchService,
+                                flightSearchService);
+
+                SearchCriteria criteria = new SearchCriteria();
+                criteria.setDepartureLocation("Istanbul");
+                criteria.setArrivalLocation("Antalya");
+                criteria.setFlexibleDates(true);
+
+                when(extractionAgent.extract(any(), any(), any(), any(), anyBoolean()))
+                                .thenReturn(new ExtractionResult("FLIGHT_SEARCH", criteria));
+
+                com.santsg.tourvisio.dto.FlightSearchResponseItem flightItem = com.santsg.tourvisio.dto.FlightSearchResponseItem.builder()
+                                .airline("THY")
+                                .price(1500.0)
+                                .build();
+
+                when(flightSearchService.searchFromCriteria(any())).thenReturn(ChatSearchResponse.builder()
+                                .reply("Found flexible flights")
+                                .searchType("FLIGHT_SEARCH")
+                                .success(true)
+                                .results(List.of(flightItem))
+                                .build());
+
+                lenient().when(responseAgent.summarize(any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+                                .thenReturn("Found flexible flights from Istanbul to Antalya");
+
+                ChatResponse response = service.orchestrate(ChatRequest.builder()
+                                .message("Istanbul'dan Antalya'ya en yakın tarihte uçak")
+                                .sessionId("session-flight-flexible-test")
+                                .build());
+
+                assertThat(response).isNotNull();
+                assertThat(response.getSuccess()).isTrue();
+                assertThat(response.getSearchType()).isEqualTo("FLIGHT_SEARCH");
+
+                SearchCriteria savedCriteria = sessionStore.getOrCreate("session-flight-flexible-test");
+                assertThat(savedCriteria.getFlexibleDates()).isTrue();
+                assertThat(savedCriteria.getPassengerCount()).isEqualTo(1);
+                assertThat(savedCriteria.getAssumedPassengerCount()).isTrue();
+                assertThat(savedCriteria.getTripType()).isEqualTo("ONE_WAY");
+                assertThat(savedCriteria.getAssumedTripType()).isTrue();
+                assertThat(savedCriteria.getDepartureDate()).isNotNull();
+        }
 }
+
 
 

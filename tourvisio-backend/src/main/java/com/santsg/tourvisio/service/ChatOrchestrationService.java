@@ -487,7 +487,67 @@ public class ChatOrchestrationService {
                             .build();
                 }
             }
+        } else if ("FLIGHT_SEARCH".equals(intent) && Boolean.TRUE.equals(existingCriteria.getFlexibleDates())) {
+            // Eğer yolcu/yetişkin sayısı daha önce belirtilmediyse varsayılan 1 yolcu atanır
+            if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() == null) {
+                existingCriteria.setPassengerCount(1);
+                existingCriteria.setAdultCount(1);
+                existingCriteria.setAssumedPassengerCount(true);
+            } else if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() != null) {
+                existingCriteria.setPassengerCount(existingCriteria.getAdultCount());
+            }
+            // Eğer yolculuk tipi (gidiş-dönüş / tek yön) belirtilmediyse varsayılan Tek Yön (ONE_WAY) atanır
+            if (existingCriteria.getTripType() == null || existingCriteria.getTripType().isBlank()) {
+                existingCriteria.setTripType("ONE_WAY");
+                existingCriteria.setAssumedTripType(true);
+            }
+
+            // Eğer gidiş tarihi henüz atanmamışsa 15 günlük pencerede ilk uygun uçuş bulunan tarih bulunur
+            if (existingCriteria.getDepartureDate() == null) {
+                java.time.LocalDate today = java.time.LocalDate.now();
+                java.time.LocalDate foundDepDate = null;
+
+                for (int dayOffset = 0; dayOffset < DEFAULT_FLEXIBLE_DATE_PROBE_DAYS; dayOffset++) {
+                    java.time.LocalDate candidateDep = today.plusDays(dayOffset);
+                    SearchCriteria probeCriteria = existingCriteria.copy();
+                    probeCriteria.setDepartureDate(candidateDep);
+
+                    try {
+                        ChatSearchResponse testRes = flightSearchService.searchFromCriteria(probeCriteria);
+                        if (testRes != null && testRes.isSuccess() && testRes.getResults() != null && !testRes.getResults().isEmpty()) {
+                            foundDepDate = candidateDep;
+                            log.info("[Orchestration] Flight flexible dates probe success: departureDate={}, resultsCount={}",
+                                    foundDepDate, testRes.getResults().size());
+                            break;
+                        }
+                    } catch (Exception e) {
+                        log.warn("[Orchestration] Flight flexible dates probe attempt failed for date {}: {}", candidateDep, e.getMessage());
+                    }
+                }
+
+                if (foundDepDate != null) {
+                    existingCriteria.setDepartureDate(foundDepDate);
+                } else {
+                    log.warn("[Orchestration] Flight flexible dates probe found no results in {} days window", DEFAULT_FLEXIBLE_DATE_PROBE_DAYS);
+                    String fallbackReply = "Belirttiğiniz " + DEFAULT_FLEXIBLE_DATE_PROBE_DAYS + " günlük esnek arama penceresinde uygun uçuş bulunamadı.\n\n" +
+                            "Dilerseniz:\n" +
+                            "1. Aramayı daha geniş bir tarih aralığında tekrarlayabilirim,\n" +
+                            "2. Belirli bir gidiş tarihi belirtebilirsiniz,\n" +
+                            "3. Kalkış veya varış noktalarını güncelleyebilirsiniz.";
+                    return ChatResponse.builder()
+                            .reply(prependNote(reclassificationNote, fallbackReply))
+                            .sessionId(sessionId)
+                            .searchType(intent)
+                            .missingFields(List.of())
+                            .chatStatus("ACTIVE")
+                            .success(false)
+                            .results(List.of())
+                            .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(existingCriteria))
+                            .build();
+                }
+            }
         }
+
 
         // 8. Eksik alan kontrolü
         List<String> missingFields = missingFieldsService.getMissingFields(existingCriteria);
