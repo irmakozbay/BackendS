@@ -33,6 +33,15 @@ public class DatabaseSchemaInitializer implements CommandLineRunner {
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP WITH TIME ZONE",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_logout_at TIMESTAMP WITH TIME ZONE",
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_two_factor_enabled BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_phone_verified BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'LOCAL'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+                "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS chat_session_id VARCHAR(255)",
+                "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Completed'",
+                "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS image_url VARCHAR(1000)",
                 "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS flight_number VARCHAR(255)",
                 "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS departure_airport_code VARCHAR(255)",
                 "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS arrival_airport_code VARCHAR(255)",
@@ -47,6 +56,7 @@ public class DatabaseSchemaInitializer implements CommandLineRunner {
                 "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS check_in_time VARCHAR(255)",
                 "ALTER TABLE reservations ADD COLUMN IF NOT EXISTS check_out_time VARCHAR(255)"
         };
+
 
         for (String sql : alterStatements) {
             try {

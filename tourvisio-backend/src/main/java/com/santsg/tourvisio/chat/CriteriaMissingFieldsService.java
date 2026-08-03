@@ -38,27 +38,31 @@ public class CriteriaMissingFieldsService {
             if (childAgesPending)                             missing.add("çocuk yaşları");
             if (infantAgesPending)                             missing.add("bebek yaşları");
 
+            boolean isFlexibleDates = Boolean.TRUE.equals(criteria.getFlexibleDates());
+
             if (isBlank(criteria.getLocationOrHotelName())) missing.add("konum veya otel adı");
-            if (criteria.getCheckInDate()  == null)          missing.add("giriş tarihi");
-            if (criteria.getCheckOutDate() == null)          missing.add("çıkış tarihi");
+            if (!isFlexibleDates && criteria.getCheckInDate()  == null)          missing.add("giriş tarihi");
+            if (!isFlexibleDates && criteria.getCheckOutDate() == null)          missing.add("çıkış tarihi");
             if (criteria.getRoomCount() == null)             missing.add("oda sayısı");
             if (criteria.getChildCount() == null)            missing.add("çocuk sayısı");
-            if (!childAgesPending && !infantAgesPending && criteria.getAdultCount() == null) {
+            if (!childAgesPending && !infantAgesPending && !isFlexibleDates && criteria.getAdultCount() == null) {
                 missing.add("yetişkin sayısı");
             }
-            if (isBlank(criteria.getCurrency()))              missing.add("para birimi");
+
 
         } else if ("FLIGHT_SEARCH".equals(searchType)) {
+            boolean isFlexibleDates = Boolean.TRUE.equals(criteria.getFlexibleDates());
+
             if (isBlank(criteria.getDepartureLocation())) missing.add("kalkış noktası");
             if (isBlank(criteria.getArrivalLocation()))   missing.add("varış noktası");
-            if (criteria.getDepartureDate()  == null)     missing.add("gidiş tarihi");
-            if (criteria.getPassengerCount() == null)     missing.add("yolcu sayısı");
-            if (isBlank(criteria.getTripType()))          missing.add("tek yön / gidiş-dönüş");
+            if (!isFlexibleDates && criteria.getDepartureDate()  == null)     missing.add("gidiş tarihi");
+            if (!isFlexibleDates && criteria.getPassengerCount() == null)     missing.add("yolcu sayısı");
+            if (!isFlexibleDates && isBlank(criteria.getTripType()))          missing.add("tek yön / gidiş-dönüş");
             if ("ROUND_TRIP".equalsIgnoreCase(criteria.getTripType()) && criteria.getReturnDate() == null) {
                 missing.add("dönüş tarihi");
             }
-            if (isBlank(criteria.getCurrency()))          missing.add("para birimi");
         }
+
 
         return missing;
     }

@@ -62,7 +62,12 @@ public class HotelSearchService {
         return hotelApiClient.searchHotels(request);
     }
 
+    public List<HotelSearchResponseItem> searchHotelsRaw(SearchCriteria criteria) {
+        return searchWithRetry(criteria);
+    }
+
     private List<HotelSearchResponseItem> searchWithRetry(SearchCriteria criteria) {
+
         List<HotelSearchResponseItem> results = hotelApiClient.searchHotelsFromCriteria(criteria);
         for (int attempt = 1; (results == null || results.isEmpty()) && attempt <= EMPTY_RESULT_RETRY_COUNT; attempt++) {
             log.warn("[HotelSearchService] Boş sonuç, {}. tekrar deneme yapılıyor ({})",

@@ -59,7 +59,32 @@ class ExtractionAgentTest {
     }
 
     @Test
+    void extract_shouldParseFlexibleDatesAndStayNights() {
+        String mockResponse = """
+                {
+                  "intent": "HOTEL_SEARCH",
+                  "criteria": {
+                    "locationOrHotelName": "Antalya",
+                    "flexibleDates": true,
+                    "stayNights": 4
+                  }
+                }
+                """;
+        when(geminiExtractionClient.complete(anyString())).thenReturn(mockResponse);
+
+        ExtractionResult result = extractionAgent.extract("Antalya'da en yakın tarihlerde 4 gece otel", null, null, null);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getIntent()).isEqualTo("HOTEL_SEARCH");
+        assertThat(result.getCriteria()).isNotNull();
+        assertThat(result.getCriteria().getLocationOrHotelName()).isEqualTo("Antalya");
+        assertThat(result.getCriteria().getFlexibleDates()).isTrue();
+        assertThat(result.getCriteria().getStayNights()).isEqualTo(4);
+    }
+
+    @Test
     void extract_shouldThrowException_whenOpenAiReturnsUnparsableJson() {
+
         when(geminiExtractionClient.complete(anyString())).thenReturn("unparsable response text");
 
         assertThrows(RuntimeException.class, () -> {

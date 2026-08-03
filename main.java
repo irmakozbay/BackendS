@@ -26,8 +26,6 @@ import java.util.UUID;
 public class ChatOrchestrationService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatOrchestrationService.class);
-    private static final int DEFAULT_FLEXIBLE_DATE_PROBE_DAYS = 15;
-
 
     private final IntentDetectionService intentDetectionService;
     private final ChatSessionManager chatSessionManager;
@@ -162,8 +160,22 @@ public class ChatOrchestrationService {
 
         // 2. Oturum sonlandırılmışsa erken çık
         if ("TERMINATED".equals(sessionState.getChatStatus())) {
+            String lang = existingCriteria != null && existingCriteria.getPreferredLanguage() != null 
+                    ? existingCriteria.getPreferredLanguage().toLowerCase() 
+                    : "tr";
+            String reply;
+            if (lang.contains("en")) {
+                reply = "This chat has been closed. Please start a new chat.";
+            } else if (lang.contains("de")) {
+                reply = "Dieser Chat wurde geschlossen. Bitte starten Sie einen neuen Chat.";
+            } else if (lang.contains("ru")) {
+                reply = "Этот чат закрыт. Пожалуйста, начните новый чат.";
+            } else {
+                reply = "Bu sohbet sonlandırılmıştır. Lütfen yeni bir sohbet başlatın.";
+            }
+
             return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, true, userMessage, conversationHistory))
+                    .reply(reply)
                     .sessionId(sessionId)
                     .searchType("OUT_OF_SCOPE")
                     .missingFields(List.of())
@@ -190,7 +202,7 @@ public class ChatOrchestrationService {
                 // Selection recognized!
                 sessionState.setMode("BOOKING");
                 sessionState.setSelectedItem(matchedItem);
-
+                
                 String confirmReply = responseAgent.confirmSelection(matchedItem, existingCriteria, userMessage, conversationHistory);
                 return ChatResponse.builder()
                         .reply(confirmReply)
@@ -216,15 +228,15 @@ public class ChatOrchestrationService {
         ExtractionResult extractionResult = null;
 
         // 3.5 Pagination (More Results) Check
-        if ("AWAITING_CONFIRM".equals(sessionState.getMode()) &&
+        if ("AWAITING_CONFIRM".equals(sessionState.getMode()) && 
             sessionState.getAllSearchResults() != null && !sessionState.getAllSearchResults().isEmpty()) {
-
+            
             String lowerMsg = userMessage.toLowerCase(Locale.forLanguageTag("tr-TR"));
             boolean isMoreRequest = lowerMsg.contains("başka seçenek") || lowerMsg.contains("başka otel") || lowerMsg.contains("başka uçuş")
                     || lowerMsg.contains("başka var mı") || lowerMsg.contains("diğer seçenek") || lowerMsg.contains("diğerlerini")
-                    || lowerMsg.contains("daha fazla") || lowerMsg.contains("show more") || lowerMsg.contains("more results")
+                    || lowerMsg.contains("daha fazla") || lowerMsg.contains("show more") || lowerMsg.contains("more results") 
                     || lowerMsg.contains("other options") || lowerMsg.contains("more options");
-
+                    
             if (isMoreRequest) {
                 return paginateResults(sessionId, sessionState, existingCriteria, userMessage);
             }
@@ -243,39 +255,34 @@ public class ChatOrchestrationService {
         if (extractionResult != null) {
             // Happy path: AI extracted intent and criteria
             String aiIntent = extractionResult.getIntent();
-            if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent)) {
+            if ("PROFANITY".equals(aiIntent) || "IRRELEVANT".equals(aiIntent) || "OUT_OF_SCOPE".equals(aiIntent)) {
                 intent = aiIntent;
-            } else if ("OUT_OF_SCOPE".equals(aiIntent)) {
-                if (hasActiveSearch && !intentDetectionService.isExplicitUnsupportedService(userMessage)) {
-                    intent = existingCriteria.getSearchType();
-                } else {
-                    intent = aiIntent;
-                }
             } else if ("HOTEL_SEARCH".equals(aiIntent) || "FLIGHT_SEARCH".equals(aiIntent)) {
+                // ExtractionAgent'a mevcut intent zaten bağlam olarak veriliyor ve
+                // "kullanıcı açıkça geçiş yapmadıkça mevcut intent'i koru" talimatı
+                // içeriyor — yani model burada HOTEL_SEARCH/FLIGHT_SEARCH döndürdüyse
+                // ya zaten aynı intent'tir ya da kullanıcı bilinçli olarak diğerine
+                // geçmiştir ("ilk uçağı listele" gibi). Eskiden burada AI'ın kararı
+                // görmezden gelinip eski intent'e zorla geri dönülüyordu, bu da otel
+                // aramasından sonra uçuş isteyen kullanıcıların hiç uçuş sonucu
+                // görememesine yol açıyordu.
                 intent = aiIntent;
             } else {
+                // UNKNOWN veya tanınmayan bir değer — belirsiz mesajlarda mevcut
+                // bağlamı koru.
                 intent = hasActiveSearch ? existingCriteria.getSearchType() : aiIntent;
             }
             incoming = extractionResult.getCriteria();
         } else {
             // Fallback path: Orchestrator-managed local rule-based pipeline
             String fallbackIntent = intentDetectionService.detectIntent(userMessage);
-            if ("PROFANITY".equals(fallbackIntent) || "IRRELEVANT".equals(fallbackIntent)) {
-                intent = fallbackIntent;
-            } else if ("OUT_OF_SCOPE".equals(fallbackIntent)) {
-                if (hasActiveSearch && !intentDetectionService.isExplicitUnsupportedService(userMessage)) {
-                    intent = existingCriteria.getSearchType();
-                } else {
-                    intent = fallbackIntent;
-                }
-            } else if ("HOTEL_SEARCH".equals(fallbackIntent) || "FLIGHT_SEARCH".equals(fallbackIntent)) {
+            if ("PROFANITY".equals(fallbackIntent) || "IRRELEVANT".equals(fallbackIntent) || "OUT_OF_SCOPE".equals(fallbackIntent)) {
                 intent = fallbackIntent;
             } else {
                 intent = hasActiveSearch ? existingCriteria.getSearchType() : fallbackIntent;
             }
             incoming = extractor.extract(userMessage, intent, sessionState.getLastRequestedField());
         }
-
 
         // Model bazen "belirli bir şehir/il verilmediyse boş bırak" talimatına uymayıp
         // tüm cümleyi (ör. "Anıtkabir yakınlarında olabilir") konum alanına yazıyor —
@@ -301,28 +308,54 @@ public class ChatOrchestrationService {
                     .build();
         }
 
-        // Handle IRRELEVANT (Category C - Progressive 3-level warnings)
-        if ("IRRELEVANT".equals(intent)) {
+        // Handle IRRELEVANT or OUT_OF_SCOPE (Progressive 3-level warnings/decline)
+        if ("IRRELEVANT".equals(intent) || "OUT_OF_SCOPE".equals(intent)) {
             int warningLevel = sessionState.incrementIrrelevantCount();
             String chatStatus = sessionState.getChatStatus();
-            String reply = responseAgent.irrelevantWarning(warningLevel, existingCriteria, userMessage);
+            
+            String reply;
+            String lang = existingCriteria != null && existingCriteria.getPreferredLanguage() != null 
+                    ? existingCriteria.getPreferredLanguage().toLowerCase() 
+                    : "tr";
+            
+            if (chatStatus.equals("TERMINATED") || warningLevel >= 3) {
+                if (lang.contains("en")) {
+                    reply = "I apologize, but I can only assist with hotel and flight bookings. Due to too many off-topic messages, this conversation has been closed. Please start a new chat. 😊";
+                } else if (lang.contains("de")) {
+                    reply = "Es tut mir leid, aber ich kann Ihnen nur bei Hotel- und Flugbuchungen helfen. Aufgrund zu vieler unpassender Nachrichten wurde dieser Chat beendet. Bitte starten Sie einen neuen Chat. 😊";
+                } else if (lang.contains("ru")) {
+                    reply = "Извините, но я могу помочь только с бронированием отелей и авиабилетов. Этот чат был закрыт из-за слишком большого количества сообщений не по теме. Пожалуйста, начните новый чат. 😊";
+                } else {
+                    reply = "Üzgünüm, sadece otel ve uçak rezervasyonları hakkında yardımcı olabiliyorum. Alakasız talepleriniz nedeniyle bu sohbet sonlandırılmıştır. Lütfen yeni bir sohbet başlatın. 😊";
+                }
+            } else {
+                String baseReply;
+                if ("OUT_OF_SCOPE".equals(intent)) {
+                    baseReply = responseAgent.decline(existingCriteria, false, userMessage, conversationHistory);
+                } else {
+                    baseReply = responseAgent.irrelevantWarning(warningLevel, existingCriteria, userMessage);
+                }
+                
+                int remaining = 3 - warningLevel;
+                String suffix;
+                if (lang.contains("en")) {
+                    suffix = "\n\n(Note: Please only ask questions related to hotel or flight bookings. If you continue with off-topic messages, this chat will be closed. Remaining warning rights: " + remaining + ")";
+                } else if (lang.contains("de")) {
+                    suffix = "\n\n(Hinweis: Bitte stellen Sie nur Fragen zu Hotel- oder Flugbuchungen. Wenn Sie mit unpassenden Nachrichten fortfahren, wird dieser Chat geschlossen. Verbleibende Versuche: " + remaining + ")";
+                } else if (lang.contains("ru")) {
+                    suffix = "\n\n(Примечание: Пожалуйста, задавайте вопросы только о бронировании отелей или авиабилетов. Если вы продолжите писать не по теме, чат будет закрыт. Осталось попыток: " + remaining + ")";
+                } else {
+                    suffix = "\n\n(Not: Lütfen sadece otel ve uçuş rezervasyonlarıyla ilgili sorular sorun. Alakasız sorulara devam ederseniz bu sohbet sonlandırılacaktır. Kalan hak: " + remaining + ")";
+                }
+                reply = baseReply + suffix;
+            }
+
             return ChatResponse.builder()
                     .reply(reply)
                     .sessionId(sessionId)
-                    .searchType("IRRELEVANT")
+                    .searchType(intent)
                     .missingFields(List.of())
                     .chatStatus(chatStatus)
-                    .build();
-        }
-
-        // Handle OUT_OF_SCOPE (Category D - Generic scope reply, ACTIVE session, NO counter increment)
-        if ("OUT_OF_SCOPE".equals(intent)) {
-            return ChatResponse.builder()
-                    .reply(responseAgent.decline(existingCriteria, false, userMessage, conversationHistory))
-                    .sessionId(sessionId)
-                    .searchType("OUT_OF_SCOPE")
-                    .missingFields(List.of())
-                    .chatStatus(sessionState.getChatStatus())
                     .build();
         }
 
@@ -387,9 +420,8 @@ public class ChatOrchestrationService {
         // reddedilen bir deneme (ör. "4 yetişkin 3 çocuk 2 bebek") bile kalıcı
         // olarak yazılıp sonraki turlarda "hayalet" kriter olarak sızmaya devam ederdi.
         SearchCriteria beforeMerge = existingCriteria.copy();
-        handleIntentSwitch(existingCriteria, intent);
         existingCriteria.mergeWith(incoming);
-
+        carryOverCrossIntentFields(existingCriteria, intent);
         applyChildInfantNegation(existingCriteria, userMessage);
         applyExclusiveGuestCountOverride(existingCriteria, userMessage);
         // Bebek/çocuk/yetişkin yaş yeniden-sınıflandırma notu varsa bir kez tüketilir
@@ -443,134 +475,8 @@ public class ChatOrchestrationService {
             }
         }
 
-        // 7.5 Esnek tarih (flexibleDates) modunda varsayılan kişi/tarih atamaları & tarih tarama
-        if ("HOTEL_SEARCH".equals(intent) && Boolean.TRUE.equals(existingCriteria.getFlexibleDates())) {
-            // Eğer yetişkin sayısı daha önce belirtilmediyse varsayılan 1 yetişkin ve 1 oda atanır
-            if (existingCriteria.getAdultCount() == null) {
-                existingCriteria.setAdultCount(1);
-                existingCriteria.setAssumedGuestCount(true);
-            }
-            if (existingCriteria.getRoomCount() == null) {
-                existingCriteria.setRoomCount(1);
-            }
-
-            // Eğer tarihler henüz atanmamışsa 15 günlük pencerede ilk uygun makul sonuç veren tarih bulunur
-            if (existingCriteria.getCheckInDate() == null || existingCriteria.getCheckOutDate() == null) {
-                int stayNights = (existingCriteria.getStayNights() != null && existingCriteria.getStayNights() > 0)
-                        ? existingCriteria.getStayNights() : 2;
-                java.time.LocalDate today = java.time.LocalDate.now();
-                java.time.LocalDate foundCheckIn = null;
-                java.time.LocalDate foundCheckOut = null;
-
-                for (int dayOffset = 0; dayOffset < DEFAULT_FLEXIBLE_DATE_PROBE_DAYS; dayOffset++) {
-                    java.time.LocalDate candidateIn = today.plusDays(dayOffset);
-                    java.time.LocalDate candidateOut = candidateIn.plusDays(stayNights);
-
-                    SearchCriteria probeCriteria = existingCriteria.copy();
-                    probeCriteria.setCheckInDate(candidateIn);
-                    probeCriteria.setCheckOutDate(candidateOut);
-
-                    try {
-                        List<com.santsg.tourvisio.dto.HotelSearchResponseItem> candidateResults = hotelSearchService.searchHotelsRaw(probeCriteria);
-                        if (candidateResults != null && !candidateResults.isEmpty()) {
-                            foundCheckIn = candidateIn;
-                            foundCheckOut = candidateOut;
-                            log.info("[Orchestration] Flexible dates probe success: checkIn={}, checkOut={}, resultsCount={}",
-                                    foundCheckIn, foundCheckOut, candidateResults.size());
-                            break;
-                        }
-                    } catch (Exception e) {
-                        log.warn("[Orchestration] Flexible dates probe attempt failed for date {}: {}", candidateIn, e.getMessage());
-                    }
-                }
-
-                if (foundCheckIn != null) {
-                    existingCriteria.setCheckInDate(foundCheckIn);
-                    existingCriteria.setCheckOutDate(foundCheckOut);
-                } else {
-                    log.warn("[Orchestration] Flexible dates probe found no results in {} days window", DEFAULT_FLEXIBLE_DATE_PROBE_DAYS);
-                    String fallbackReply = "Belirttiğiniz " + DEFAULT_FLEXIBLE_DATE_PROBE_DAYS + " günlük esnek arama penceresinde uygun otel bulunamadı.\n\n" +
-                            "Dilerseniz:\n" +
-                            "1. Aramayı daha geniş bir tarih aralığında tekrarlayabilirim,\n" +
-                            "2. Yakın tarihli farklı alternatiflere bakabiliriz,\n" +
-                            "3. Aramayı farklı bir şehir/destinasyon için güncelleyebilirsiniz.";
-                    return ChatResponse.builder()
-                            .reply(prependNote(reclassificationNote, fallbackReply))
-                            .sessionId(sessionId)
-                            .searchType(intent)
-                            .missingFields(List.of())
-                            .chatStatus("ACTIVE")
-                            .success(false)
-                            .results(List.of())
-                            .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(existingCriteria))
-                            .build();
-                }
-            }
-        } else if ("FLIGHT_SEARCH".equals(intent) && Boolean.TRUE.equals(existingCriteria.getFlexibleDates())) {
-            // Eğer yolcu/yetişkin sayısı daha önce belirtilmediyse varsayılan 1 yolcu atanır
-            if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() == null) {
-                existingCriteria.setPassengerCount(1);
-                existingCriteria.setAdultCount(1);
-                existingCriteria.setAssumedPassengerCount(true);
-            } else if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() != null) {
-                existingCriteria.setPassengerCount(existingCriteria.getAdultCount());
-            }
-            // Eğer yolculuk tipi (gidiş-dönüş / tek yön) belirtilmediyse varsayılan Tek Yön (ONE_WAY) atanır
-            if (existingCriteria.getTripType() == null || existingCriteria.getTripType().isBlank()) {
-                existingCriteria.setTripType("ONE_WAY");
-                existingCriteria.setAssumedTripType(true);
-            }
-
-            // Eğer gidiş tarihi henüz atanmamışsa 15 günlük pencerede ilk uygun uçuş bulunan tarih bulunur
-            if (existingCriteria.getDepartureDate() == null) {
-                java.time.LocalDate today = java.time.LocalDate.now();
-                java.time.LocalDate foundDepDate = null;
-
-                for (int dayOffset = 0; dayOffset < DEFAULT_FLEXIBLE_DATE_PROBE_DAYS; dayOffset++) {
-                    java.time.LocalDate candidateDep = today.plusDays(dayOffset);
-                    SearchCriteria probeCriteria = existingCriteria.copy();
-                    probeCriteria.setDepartureDate(candidateDep);
-
-                    try {
-                        ChatSearchResponse testRes = flightSearchService.searchFromCriteria(probeCriteria);
-                        if (testRes != null && testRes.isSuccess() && testRes.getResults() != null && !testRes.getResults().isEmpty()) {
-                            foundDepDate = candidateDep;
-                            log.info("[Orchestration] Flight flexible dates probe success: departureDate={}, resultsCount={}",
-                                    foundDepDate, testRes.getResults().size());
-                            break;
-                        }
-                    } catch (Exception e) {
-                        log.warn("[Orchestration] Flight flexible dates probe attempt failed for date {}: {}", candidateDep, e.getMessage());
-                    }
-                }
-
-                if (foundDepDate != null) {
-                    existingCriteria.setDepartureDate(foundDepDate);
-                } else {
-                    log.warn("[Orchestration] Flight flexible dates probe found no results in {} days window", DEFAULT_FLEXIBLE_DATE_PROBE_DAYS);
-                    String fallbackReply = "Belirttiğiniz " + DEFAULT_FLEXIBLE_DATE_PROBE_DAYS + " günlük esnek arama penceresinde uygun uçuş bulunamadı.\n\n" +
-                            "Dilerseniz:\n" +
-                            "1. Aramayı daha geniş bir tarih aralığında tekrarlayabilirim,\n" +
-                            "2. Belirli bir gidiş tarihi belirtebilirsiniz,\n" +
-                            "3. Kalkış veya varış noktalarını güncelleyebilirsiniz.";
-                    return ChatResponse.builder()
-                            .reply(prependNote(reclassificationNote, fallbackReply))
-                            .sessionId(sessionId)
-                            .searchType(intent)
-                            .missingFields(List.of())
-                            .chatStatus("ACTIVE")
-                            .success(false)
-                            .results(List.of())
-                            .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(existingCriteria))
-                            .build();
-                }
-            }
-        }
-
-
         // 8. Eksik alan kontrolü
         List<String> missingFields = missingFieldsService.getMissingFields(existingCriteria);
-
 
         if (!missingFields.isEmpty()) {
             sessionState.setLastRequestedField(String.join(", ", missingFields));
@@ -717,6 +623,44 @@ public class ChatOrchestrationService {
             return null;
         }
         return trimmed;
+    }
+
+    /**
+     * Otel ve uçuş arasında intent değişince ("ilk uçağı listele" / "ilk oteli
+     * listele" gibi), aynı seyahatin ortak bilgilerini (tarih, yolcu sayısı)
+     * sıfırdan sormak yerine karşı taraftan devralır. Örn. kullanıcı önce
+     * "15 Ağustos gidiş 20 Ağustos dönüş 2 yetişkin" ile uçuş aramışsa, sonra
+     * "ilk oteli listele" dediğinde checkIn/checkOut/adultCount boşsa
+     * departureDate/returnDate/passengerCount'tan doldurulur (ve tersi).
+     */
+    private void carryOverCrossIntentFields(SearchCriteria criteria, String intent) {
+        if (criteria == null) {
+            return;
+        }
+        if ("HOTEL_SEARCH".equals(intent)) {
+            if (criteria.getCheckInDate() == null && criteria.getDepartureDate() != null) {
+                criteria.setCheckInDate(criteria.getDepartureDate());
+            }
+            if (criteria.getCheckOutDate() == null && criteria.getReturnDate() != null) {
+                criteria.setCheckOutDate(criteria.getReturnDate());
+            }
+            if (criteria.getAdultCount() == null && criteria.getPassengerCount() != null) {
+                criteria.setAdultCount(criteria.getPassengerCount());
+            }
+        } else if ("FLIGHT_SEARCH".equals(intent)) {
+            if (criteria.getDepartureDate() == null && criteria.getCheckInDate() != null) {
+                criteria.setDepartureDate(criteria.getCheckInDate());
+            }
+            if (criteria.getReturnDate() == null && criteria.getCheckOutDate() != null) {
+                criteria.setReturnDate(criteria.getCheckOutDate());
+                if (criteria.getTripType() == null || "ONE_WAY".equals(criteria.getTripType())) {
+                    criteria.setTripType("ROUND_TRIP");
+                }
+            }
+            if (criteria.getPassengerCount() == null && criteria.getAdultCount() != null) {
+                criteria.setPassengerCount(criteria.getAdultCount());
+            }
+        }
     }
 
     private void adjustIncomingCriteria(SearchCriteria incoming, String lastField, String message) {
@@ -994,7 +938,7 @@ public class ChatOrchestrationService {
         if (hasUnambiguousGermanChars) {
             return "German";
         }
-
+        
         // ö and ü are shared between Turkish and German. We don't eagerly return here to avoid false positives.
 
         String[] tokens = lower.split("[^a-zçğıöşüäßа-яё0-9]+");
@@ -1002,7 +946,7 @@ public class ChatOrchestrationService {
         int englishHits = 0;
         int germanHits = 0;
         int russianHits = 0;
-
+        
         for (String token : tokens) {
             if (TURKISH_WORDS.contains(token)) turkishHits++;
             if (ENGLISH_WORDS.contains(token)) englishHits++;
@@ -1014,7 +958,7 @@ public class ChatOrchestrationService {
         if (hasLoneDotlessI) {
             turkishHits++;
         }
-
+        
         boolean hasSharedUmlauts = lower.chars().anyMatch(c -> c == 'ö' || c == 'ü');
         if (hasSharedUmlauts) {
             if (germanHits > turkishHits) germanHits++;
@@ -1022,14 +966,14 @@ public class ChatOrchestrationService {
         }
 
         int maxHits = Math.max(Math.max(turkishHits, englishHits), Math.max(germanHits, russianHits));
-
+        
         if (maxHits == 0) return null;
-
+        
         if (maxHits == turkishHits) return "Turkish";
         if (maxHits == germanHits) return "German";
         if (maxHits == russianHits) return "Russian";
         if (maxHits == englishHits) return "English";
-
+        
         return null;
     }
 
@@ -1086,7 +1030,7 @@ public class ChatOrchestrationService {
             String userMessage,
             String reclassificationNote,
             String conversationHistory) {
-
+        
         // ... (Guardrail check) ...
         // Guardrail Interceptor: Çocuk var ama yaşlar eksikse arama tetiklenemez
         if ("HOTEL_SEARCH".equals(intent) && criteria.getChildCount() != null && criteria.getChildCount() > 0
@@ -1217,14 +1161,14 @@ public class ChatOrchestrationService {
         if (userMessage == null || userMessage.isBlank() || lastResults == null) {
             return null;
         }
-
+        
         String cleanUserMsg = userMessage.toLowerCase(Locale.forLanguageTag("tr-TR"))
             .replace("hoteli", "")
             .replace("oteli", "")
             .replace("hotel", "")
             .replace("otel", "")
             .trim();
-
+            
         for (Object item : lastResults) {
             String itemName = "";
             if (item instanceof com.santsg.tourvisio.dto.HotelSearchResponseItem) {
@@ -1232,7 +1176,7 @@ public class ChatOrchestrationService {
             } else if (item instanceof com.santsg.tourvisio.dto.FlightSearchResponseItem) {
                 itemName = ((com.santsg.tourvisio.dto.FlightSearchResponseItem) item).getAirline();
             }
-
+            
             if (itemName != null && !itemName.isBlank()) {
                 String cleanItemName = itemName.toLowerCase(Locale.forLanguageTag("tr-TR"));
                 if (userMessage.toLowerCase(Locale.forLanguageTag("tr-TR")).contains(cleanItemName) || cleanItemName.contains(cleanUserMsg)) {
@@ -1292,71 +1236,5 @@ public class ChatOrchestrationService {
                 .results(slicedResults)
                 .criteria(com.santsg.tourvisio.dto.ChatCriteriaSummary.from(criteria))
                 .build();
-    }
-
-    private void handleIntentSwitch(SearchCriteria existingCriteria, String newIntent) {
-        if (newIntent == null || !("HOTEL_SEARCH".equals(newIntent) || "FLIGHT_SEARCH".equals(newIntent))) {
-            return;
-        }
-        String oldIntent = existingCriteria.getSearchType();
-        if (oldIntent == null || oldIntent.equals(newIntent)) {
-            existingCriteria.setSearchType(newIntent);
-            return;
-        }
-
-        log.info("[Orchestration] Intent switch detected: {} -> {}", oldIntent, newIntent);
-        existingCriteria.setSearchType(newIntent);
-
-        if ("HOTEL_SEARCH".equals(oldIntent) && "FLIGHT_SEARCH".equals(newIntent)) {
-            // Transfer shared criteria: location -> arrivalLocation, checkIn -> departure, checkOut -> return, adultCount -> passengerCount
-            if (isTextBlank(existingCriteria.getArrivalLocation()) && !isTextBlank(existingCriteria.getLocationOrHotelName())) {
-                existingCriteria.setArrivalLocation(existingCriteria.getLocationOrHotelName());
-            }
-            if (existingCriteria.getDepartureDate() == null && existingCriteria.getCheckInDate() != null) {
-                existingCriteria.setDepartureDate(existingCriteria.getCheckInDate());
-            }
-            if (existingCriteria.getReturnDate() == null && existingCriteria.getCheckOutDate() != null) {
-                existingCriteria.setReturnDate(existingCriteria.getCheckOutDate());
-                existingCriteria.setTripType("ROUND_TRIP");
-                existingCriteria.setAssumedTripType(false);
-            }
-            if (existingCriteria.getPassengerCount() == null && existingCriteria.getAdultCount() != null) {
-                existingCriteria.setPassengerCount(existingCriteria.getAdultCount());
-            }
-
-            // Clear hotel-specific fields so they don't leak into flight search
-            existingCriteria.setLocationOrHotelName(null);
-            existingCriteria.setRoomCount(null);
-            existingCriteria.setMinStars(null);
-
-        } else if ("FLIGHT_SEARCH".equals(oldIntent) && "HOTEL_SEARCH".equals(newIntent)) {
-            // Transfer shared criteria: arrivalLocation -> locationOrHotelName, departure -> checkIn, return -> checkOut, passengerCount -> adultCount
-            if (isTextBlank(existingCriteria.getLocationOrHotelName()) && !isTextBlank(existingCriteria.getArrivalLocation())) {
-                existingCriteria.setLocationOrHotelName(existingCriteria.getArrivalLocation());
-            }
-            if (existingCriteria.getCheckInDate() == null && existingCriteria.getDepartureDate() != null) {
-                existingCriteria.setCheckInDate(existingCriteria.getDepartureDate());
-            }
-            if (existingCriteria.getCheckOutDate() == null && existingCriteria.getReturnDate() != null) {
-                existingCriteria.setCheckOutDate(existingCriteria.getReturnDate());
-            }
-            if (existingCriteria.getAdultCount() == null && existingCriteria.getPassengerCount() != null) {
-                existingCriteria.setAdultCount(existingCriteria.getPassengerCount());
-            }
-
-            // Clear flight-specific fields so they don't leak into hotel search
-            existingCriteria.setDepartureLocation(null);
-            existingCriteria.setArrivalLocation(null);
-            existingCriteria.setDepartureDate(null);
-            existingCriteria.setReturnDate(null);
-            existingCriteria.setPassengerCount(null);
-            existingCriteria.setTripType(null);
-            existingCriteria.setAssumedTripType(false);
-            existingCriteria.setAssumedPassengerCount(false);
-        }
-    }
-
-    private boolean isTextBlank(String s) {
-        return s == null || s.isBlank();
     }
 }
