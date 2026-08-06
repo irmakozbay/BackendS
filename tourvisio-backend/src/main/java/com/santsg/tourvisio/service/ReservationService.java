@@ -60,8 +60,8 @@ public class ReservationService {
             }
 
             if ("TR".equalsIgnoreCase(nat.trim())) {
-                if (!idNum.matches("^[1-9]\\d{10}$")) {
-                    throw new IllegalArgumentException(pName + " için T.C. Kimlik numarası geçersiz (11 hane olmalı ve 0 ile başlamamalı).");
+                if (!isValidTCKN(idNum)) {
+                    throw new IllegalArgumentException(pName + " için T.C. Kimlik numarası geçersiz (algoritmaya uymuyor veya hatalı hane).");
                 }
             } else {
                 if (idNum.trim().length() < 5) {
@@ -253,5 +253,35 @@ public class ReservationService {
         Reservation reservation = getReservationById(id);
         reservation.setStatus("CANCELLED");
         reservationRepository.save(reservation);
+    }
+
+    public static boolean isValidTCKN(String tckn) {
+        if (tckn == null || !tckn.matches("^[1-9]\\d{10}$")) {
+            return false;
+        }
+
+        int[] digits = new int[11];
+        for (int i = 0; i < 11; i++) {
+            digits[i] = Character.getNumericValue(tckn.charAt(i));
+        }
+
+        int oddSum = digits[0] + digits[2] + digits[4] + digits[6] + digits[8];
+        int evenSum = digits[1] + digits[3] + digits[5] + digits[7];
+
+        int d10 = ((oddSum * 7 - evenSum) % 10 + 10) % 10;
+        if (d10 != digits[9]) {
+            return false;
+        }
+
+        int sumFirst10 = 0;
+        for (int i = 0; i < 10; i++) {
+            sumFirst10 += digits[i];
+        }
+        int d11 = sumFirst10 % 10;
+        if (d11 != digits[10]) {
+            return false;
+        }
+
+        return true;
     }
 }
