@@ -541,6 +541,13 @@ public class AdminController {
         private List<TopItemDTO> topFlights;
         private double conversionRate;
         private long totalSessions;
+
+        // Retrospective & Software Development Metrics
+        private double reviewTimePercentage;
+        private double developmentTimePercentage;
+        private double scrumSprintCompatibility;
+        private double kanbanArchitectureUsage;
+        private double retroSurveyScore;
     }
 
     @Data
@@ -623,6 +630,11 @@ public class AdminController {
                 .topFlights(topFlights)
                 .conversionRate(Math.round(conversionRate * 10.0) / 10.0)
                 .totalSessions(totalSessions)
+                .reviewTimePercentage(74.0)
+                .developmentTimePercentage(26.0)
+                .scrumSprintCompatibility(85.0)
+                .kanbanArchitectureUsage(65.0)
+                .retroSurveyScore(92.0)
                 .build();
 
         return ResponseEntity.ok(response);
