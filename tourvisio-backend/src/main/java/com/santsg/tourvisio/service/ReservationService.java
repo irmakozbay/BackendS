@@ -101,6 +101,13 @@ public class ReservationService {
 
     @Transactional
     public Reservation createReservation(ReservationRequest request, Long userId) {
+        // Simulate TourVisio external supplier API booking response network delay
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         validateReservationRequest(request);
 
         // Generate a unique PNR / reservation number (e.g. PNR-849201)
