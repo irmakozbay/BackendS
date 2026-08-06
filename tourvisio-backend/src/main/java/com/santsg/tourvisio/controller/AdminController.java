@@ -32,15 +32,18 @@ public class AdminController {
     private final UserRepository userRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatSessionRepository chatSessionRepository;
+    private final javax.sql.DataSource dataSource;
 
     public AdminController(ReservationRepository reservationRepository,
                            UserRepository userRepository,
                            ChatMessageRepository chatMessageRepository,
-                           ChatSessionRepository chatSessionRepository) {
+                           ChatSessionRepository chatSessionRepository,
+                           javax.sql.DataSource dataSource) {
         this.reservationRepository = reservationRepository;
         this.userRepository = userRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.chatSessionRepository = chatSessionRepository;
+        this.dataSource = dataSource;
     }
 
     /**
@@ -491,24 +494,41 @@ public class AdminController {
         double memoryUsagePercentage = ((double) usedMemory / maxMemory) * 100.0;
 
         java.lang.management.OperatingSystemMXBean osBean = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
-        double systemCpuLoad = 0.0;
+        // JVM proses CPU kullanımı (com.sun.management üzerinden)
+        double processCpuLoad = -1.0;
         try {
-            java.lang.reflect.Method method = osBean.getClass().getMethod("getCpuLoad");
-            systemCpuLoad = (double) method.invoke(osBean) * 100.0;
-        } catch (Exception e) {
-            try {
-                java.lang.reflect.Method method = osBean.getClass().getMethod("getSystemCpuLoad");
-                systemCpuLoad = (double) method.invoke(osBean) * 100.0;
-            } catch (Exception ex) {
-                systemCpuLoad = osBean.getSystemLoadAverage();
+            // Java 17+ : ProcessCpuLoad
+            if (osBean instanceof com.sun.management.OperatingSystemMXBean sunOsBean) {
+                processCpuLoad = sunOsBean.getProcessCpuLoad() * 100.0;
             }
+        } catch (Exception ignored) { }
+        // Sistem genelindeki CPU (yedek)
+        if (processCpuLoad < 0 || Double.isNaN(processCpuLoad)) {
+            try {
+                if (osBean instanceof com.sun.management.OperatingSystemMXBean sunOsBean) {
+                    processCpuLoad = sunOsBean.getCpuLoad() * 100.0;
+                }
+            } catch (Exception ignored) { }
         }
-        if (systemCpuLoad < 0 || Double.isNaN(systemCpuLoad)) {
-            systemCpuLoad = 14.2; // Realistic fallback if loadavg is unsupported
+        if (processCpuLoad < 0 || Double.isNaN(processCpuLoad)) {
+            processCpuLoad = 0.0; // Gerçekten ölçülemediyse 0 göster, mock değil
         }
 
         int activeThreads = Thread.activeCount();
         long uptime = java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime();
+
+        // Gerçek HikariCP havuz istatistikleri
+        int dbActive = 0;
+        int dbMax = 0;
+        try {
+            if (dataSource instanceof com.zaxxer.hikari.HikariDataSource hikariDs) {
+                com.zaxxer.hikari.HikariPoolMXBean poolBean = hikariDs.getHikariPoolMXBean();
+                if (poolBean != null) {
+                    dbActive = poolBean.getActiveConnections();
+                    dbMax = hikariDs.getMaximumPoolSize();
+                }
+            }
+        } catch (Exception ignored) { }
 
         Map<String, Object> metrics = new HashMap<>();
         metrics.put("maxMemory", maxMemory);
@@ -516,11 +536,11 @@ public class AdminController {
         metrics.put("usedMemory", usedMemory);
         metrics.put("freeMemory", freeMemory);
         metrics.put("memoryUsagePercentage", Math.round(memoryUsagePercentage * 10.0) / 10.0);
-        metrics.put("cpuUsagePercentage", Math.round(systemCpuLoad * 10.0) / 10.0);
+        metrics.put("cpuUsagePercentage", Math.round(processCpuLoad * 10.0) / 10.0);
         metrics.put("activeThreads", activeThreads);
         metrics.put("uptimeSeconds", uptime / 1000);
-        metrics.put("dbConnectionsActive", 1);
-        metrics.put("dbConnectionsMax", 10);
+        metrics.put("dbConnectionsActive", dbActive);
+        metrics.put("dbConnectionsMax", dbMax);
         metrics.put("osName", osBean.getName());
         metrics.put("osVersion", osBean.getVersion());
         metrics.put("availableProcessors", osBean.getAvailableProcessors());

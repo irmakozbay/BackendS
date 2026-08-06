@@ -12,9 +12,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class ReservationService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReservationService.class);
 
     private final ReservationRepository reservationRepository;
     private final EmailService emailService;
@@ -110,8 +114,8 @@ public class ReservationService {
 
         validateReservationRequest(request);
 
-        // Generate a unique PNR / reservation number (e.g. PNR-849201)
-        String reservationNum = "PNR-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
+        // Generate a unique TourVisio reservation number (e.g. TV-849201)
+        String reservationNum = "TV-" + (100000 + new java.util.Random().nextInt(900000));
 
         Reservation reservation = Reservation.builder()
                 .reservationNumber(reservationNum)
@@ -159,6 +163,41 @@ public class ReservationService {
 
         reservation.setPassengers(passengers);
         Reservation savedReservation = reservationRepository.save(reservation);
+
+        log.info("[ReservationService] Yeni rezervasyon oluşturuldu: PNR={}, User={}", reservationNum, userId);
+
+        // Log to TourVisio GDS API log table (api_logs)
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            String reqJson = mapper.writeValueAsString(request);
+            java.util.Map<String, Object> respMap = new java.util.HashMap<>();
+            respMap.put("id", savedReservation.getId());
+            respMap.put("reservationNumber", savedReservation.getReservationNumber());
+            respMap.put("itemName", savedReservation.getItemName());
+            respMap.put("type", savedReservation.getType());
+            respMap.put("destination", savedReservation.getDestination());
+            respMap.put("startDate", savedReservation.getStartDate() != null ? savedReservation.getStartDate().toString() : null);
+            respMap.put("endDate", savedReservation.getEndDate() != null ? savedReservation.getEndDate().toString() : null);
+            respMap.put("totalPrice", savedReservation.getTotalPrice());
+            respMap.put("currency", savedReservation.getCurrency());
+            respMap.put("status", "SUCCESS");
+            
+            String respJson = mapper.writeValueAsString(respMap);
+            com.santsg.tourvisio.config.TourVisioApiMonitor.logCall(
+                "POST", 
+                "/api/tourvisio/booking", 
+                2000L, 
+                200, 
+                "OK", 
+                null, 
+                true, 
+                reqJson, 
+                respJson
+            );
+        } catch (Exception e) {
+            log.error("Failed to write TourVisio GDS API log for reservation booking", e);
+        }
 
         // Send confirmation email
         PassengerRequest primary = request.getPassengers().get(0);

@@ -99,7 +99,7 @@ class TourvisioBackendApplicationTests {
 				"Yilmaz",
 				"ahmet@gmail.com",
 				"+905555555555",
-				"12345678901");
+				"10000000146");
 
 		ReservationRequest request = new ReservationRequest(
 				"HOTEL",
@@ -121,7 +121,7 @@ class TourvisioBackendApplicationTests {
 				.requestAttr("userId", 1L))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.id", notNullValue()))
-				.andExpect(jsonPath("$.reservationNumber", startsWith("PNR-")))
+				.andExpect(jsonPath("$.reservationNumber", startsWith("TV-")))
 				.andExpect(jsonPath("$.passengers", hasSize(1)))
 				.andExpect(jsonPath("$.passengers[0].firstName", equalTo("Ahmet")))
 				.andReturn().getResponse().getContentAsString();
@@ -155,7 +155,7 @@ class TourvisioBackendApplicationTests {
 				"Yilmaz",
 				"ahmet@gmail.com",
 				"+905555555555",
-				"12345678901",
+				"10000000146",
 				LocalDate.of(1990, 1, 1),
 				"MR",
 				"TR"

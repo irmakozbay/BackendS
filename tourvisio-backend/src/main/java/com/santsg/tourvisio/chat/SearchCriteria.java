@@ -333,9 +333,11 @@ public class SearchCriteria {
     public FlightSearchRequest toFlightSearchRequest() {
         if (departureLocation == null || arrivalLocation == null
                 || departureDate == null || passengerCount == null
-                || tripType == null || currency == null) {
+                || tripType == null) {
             return null;
         }
+        // Currency belirtilmemişse varsayılan TRY kullan
+        String effectiveCurrency = (currency != null && !currency.isBlank()) ? currency : "TRY";
         FlightSearchRequest req = new FlightSearchRequest();
         req.setDepartureLocation(departureLocation);
         req.setArrivalLocation(arrivalLocation);
@@ -345,7 +347,7 @@ public class SearchCriteria {
         // tercih ediyoruz ki "2 yetişkin 1 çocuk" derken çocuk yetişkin koltuğu sayılmasın.
         req.setPassengerCount(adultCount != null && adultCount > 0 ? adultCount : passengerCount);
         req.setTripType(tripType);
-        req.setCurrency(currency);
+        req.setCurrency(effectiveCurrency);
         // Set new fields
         req.setDepartureAirport(departureLocation);
         req.setArrivalAirport(arrivalLocation);

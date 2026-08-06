@@ -120,12 +120,12 @@ public class SearchCriteriaExtractor {
 
     // ── Kalkış: "İstanbul'dan", "İstanbul dan" ───────────────────────────────
     private static final Pattern DEPARTURE_CITY_PATTERN = Pattern.compile(
-            "\\b(\\w+)(?:'?(?:dan|den|tan|ten))\\b",
+            "(?<![a-zA-Zçğıöşüİı])([a-zA-Zçğıöşüİı]+)(?:'?(?:dan|den|tan|ten))(?![a-zA-Zçğıöşüİı])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     // ── Varış: "Antalya'ya", "Antalya ya" ────────────────────────────────────
     private static final Pattern ARRIVAL_CITY_PATTERN = Pattern.compile(
-            "\\b(\\w+)(?:'?(?:ya|ye|a|e))\\b",
+            "(?<![a-zA-Zçğıöşüİı])([a-zA-Zçğıöşüİı]+)(?:'?(?:ya|ye|a|e))(?![a-zA-Zçğıöşüİı])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -189,8 +189,10 @@ public class SearchCriteriaExtractor {
     private void extractHotelFields(String lower, SearchCriteria c, String awaitingField) {
 
         // Lokasyon
+        String normalizedQuery = normalizeForCityComparison(lower);
         for (String city : HOTEL_CITIES) {
-            if (lower.contains(city)) {
+            String normalizedCity = normalizeForCityComparison(city);
+            if (normalizedQuery.contains(normalizedCity)) {
                 c.setLocationOrHotelName(capitalize(city));
                 break;
             }
@@ -218,6 +220,15 @@ public class SearchCriteriaExtractor {
 
         // Tarihler (giriş & çıkış)
         extractHotelDates(lower, c, awaitingField);
+
+        // Gece sayısı ve çıkış tarihi hesaplama
+        Matcher nm = NIGHT_PATTERN.matcher(lower);
+        if (nm.find()) {
+            int nights = Integer.parseInt(nm.group(1));
+            if (c.getCheckInDate() != null) {
+                c.setCheckOutDate(c.getCheckInDate().plusDays(nights));
+            }
+        }
     }
 
     /**
@@ -349,33 +360,29 @@ public class SearchCriteriaExtractor {
             c.setTripType("ROUND_TRIP");
         }
 
-        // Kalkış şehri ("İstanbul'dan" → Istanbul)
-        Matcher depM = DEPARTURE_CITY_PATTERN.matcher(lower);
-        while (depM.find()) {
-            String candidate = depM.group(1);
-            String matchedCity = findCityMatch(candidate, FLIGHT_CITIES);
-            if (matchedCity != null) {
-                c.setDepartureLocation(capitalize(matchedCity));
-                break;
-            }
-        }
-
-        // Varış şehri ("Antalya'ya" → Antalya)
-        Matcher arrM = ARRIVAL_CITY_PATTERN.matcher(lower);
-        while (arrM.find()) {
-            String candidate = arrM.group(1);
-            String matchedCity = findCityMatch(candidate, FLIGHT_CITIES);
-            if (matchedCity != null
-                    && !matchedCity.equalsIgnoreCase(c.getDepartureLocation())) {
-                c.setArrivalLocation(capitalize(matchedCity));
-                break;
+        // Kalkış ve varış şehirleri çıkarımı (suffix kontrolleri)
+        String normalizedFlightQuery = normalizeForCityComparison(lower);
+        for (String city : FLIGHT_CITIES) {
+            String normalizedCity = normalizeForCityComparison(city);
+            int idx = normalizedFlightQuery.indexOf(normalizedCity);
+            if (idx != -1) {
+                String suffix = normalizedFlightQuery.substring(idx + normalizedCity.length()).trim();
+                if (suffix.startsWith("'")) {
+                    suffix = suffix.substring(1).trim();
+                }
+                if (suffix.startsWith("dan") || suffix.startsWith("den") || suffix.startsWith("tan") || suffix.startsWith("ten")) {
+                    c.setDepartureLocation(capitalize(city));
+                } else if (suffix.startsWith("ya") || suffix.startsWith("ye") || suffix.startsWith("a") || suffix.startsWith("e")) {
+                    c.setArrivalLocation(capitalize(city));
+                }
             }
         }
 
         // Doğrudan şehir adı (suffix olmadan) — kalkış veya varış belirsizse atla
         if (c.getDepartureLocation() == null || c.getArrivalLocation() == null) {
             for (String city : FLIGHT_CITIES) {
-                if (containsCity(lower, city)) {
+                String normalizedCity = normalizeForCityComparison(city);
+                if (normalizedFlightQuery.contains(normalizedCity)) {
                     if (c.getDepartureLocation() == null
                             && !city.equalsIgnoreCase(c.getArrivalLocation())) {
                         c.setDepartureLocation(capitalize(city));
@@ -575,7 +582,9 @@ public class SearchCriteriaExtractor {
 
     private String normalizeForCityComparison(String s) {
         if (s == null) return "";
-        return s.toLowerCase(Locale.forLanguageTag("tr-TR"))
+        String normalized = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+        normalized = normalized.replaceAll("\\p{M}", "");
+        return normalized.toLowerCase(Locale.ROOT)
                 .replace('ı', 'i')
                 .replace('İ', 'i')
                 .replace('ü', 'u')

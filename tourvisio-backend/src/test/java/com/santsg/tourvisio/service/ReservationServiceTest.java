@@ -35,7 +35,7 @@ class ReservationServiceTest {
 
     @BeforeEach
     void setUp() {
-        PassengerRequest passenger = new PassengerRequest("Ahmet", "Yılmaz", "ahmet@example.com", "+905551112233", "12345678901");
+        PassengerRequest passenger = new PassengerRequest("Ahmet", "Yılmaz", "ahmet@example.com", "+905551112233", "10000000146");
         request = new ReservationRequest();
         request.setType("HOTEL");
         request.setItemName("Grand Hotel");
